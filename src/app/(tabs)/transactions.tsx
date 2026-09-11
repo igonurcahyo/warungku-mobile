@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -24,7 +24,12 @@ import { QrisPaymentModal } from '@/components/pos/qris-payment-modal';
 import { useStore } from '@/context/store-context';
 
 export default function TransactionsScreen() {
-  const { transactions, cancelTransaction } = useStore();
+  const { transactions, cancelTransaction, fetchTransactions, isLoadingTransactions } =
+    useStore();
+
+  useEffect(() => {
+    fetchTransactions();
+  }, [fetchTransactions]);
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -188,6 +193,8 @@ export default function TransactionsScreen() {
             onResumePayment={handleResumePayment}
           />
         )}
+        refreshing={isLoadingTransactions}
+        onRefresh={fetchTransactions}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"

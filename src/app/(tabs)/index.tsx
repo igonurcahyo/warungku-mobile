@@ -63,7 +63,7 @@ export default function DashboardScreen() {
       >
         {/* Greeting Banner */}
         <View style={styles.greetingSection}>
-          <Text style={styles.greetingTitle}>Selamat datang 👋</Text>
+          <Text style={styles.greetingTitle}>Selamat datang </Text>
           <Text style={styles.greetingSubtitle}>
             Kelola warung Anda dengan mudah.
           </Text>

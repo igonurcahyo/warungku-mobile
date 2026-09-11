@@ -29,6 +29,11 @@ import {
   getStockApi,
   updateStockApi,
 } from '@/api/stock';
+import {
+  BackendTransaction,
+  getTransactionsApi,
+  createCashTransactionApi,
+} from '@/api/transactions';
 
 export interface StockNotification {
   id: string;
@@ -111,7 +116,14 @@ interface StoreContextType {
   unreadCount: number;
   // Transactions
   transactions: Transaction[];
+  isLoadingTransactions: boolean;
+  transactionsError: string | null;
+  fetchTransactions: () => Promise<void>;
   createTransaction: (params: CreateTransactionParams) => Transaction;
+  createCashTransaction: (params: {
+    items: Array<{ productId: number; quantity: number }>;
+    paidAmount: number;
+  }) => Promise<{ success: boolean; data?: Transaction; error?: string }>;
   markTransactionPaid: (transactionId: string) => void;
   cancelTransaction: (transactionId: string) => void;
   // Auth state
@@ -145,6 +157,30 @@ function formatIndonesianDateDisplay(d: Date): string {
   return `${day} ${month} ${year} • ${hours}:${minutes}`;
 }
 
+function mapBackendTransaction(bt: BackendTransaction): Transaction {
+  const date = new Date(bt.createdAt);
+  return {
+    id: bt.transactionNumber || `TRX-${String(bt.id).padStart(5, '0')}`,
+    dateISO: bt.createdAt,
+    dateDisplay: formatIndonesianDateDisplay(date),
+    items: (bt.items || []).map((it) => ({
+      productName: it.productName,
+      quantity: it.quantity,
+      price: it.price,
+      subtotal: it.subtotal,
+    })),
+    total: bt.total,
+    paymentMethod: bt.paymentMethod === 'qris' ? 'QRIS' : 'Tunai',
+    paymentStatus:
+      bt.paymentStatus === 'paid'
+        ? 'Lunas'
+        : bt.paymentStatus === 'pending'
+          ? 'Menunggu Pembayaran'
+          : 'Dibatalkan',
+    paidAt: bt.paymentStatus === 'paid' ? bt.createdAt : undefined,
+  };
+}
+
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -158,6 +194,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [stockNotificationEnabled, setStockNotificationEnabled] = useState(true);
   const [storeInfo, setStoreInfo] = useState<StoreInfo>(DEFAULT_STORE_INFO);
   const [transactions, setTransactions] = useState<Transaction[]>(DUMMY_TRANSACTIONS);
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
+  const [transactionsError, setTransactionsError] = useState<string | null>(null);
 
   // Mobile Auth State
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -315,6 +353,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return { success: false, error: res.error || 'Gagal menghapus kategori' };
   };
 
+  const fetchTransactions = useCallback(async (): Promise<void> => {
+    setIsLoadingTransactions(true);
+    setTransactionsError(null);
+    try {
+      const res = await getTransactionsApi();
+      if (res.success && res.data) {
+        setTransactions(res.data.map(mapBackendTransaction));
+      } else {
+        setTransactionsError(res.error || 'Gagal memuat transaksi.');
+      }
+    } catch (err: any) {
+      setTransactionsError(err?.message || 'Gagal memuat transaksi.');
+    } finally {
+      setIsLoadingTransactions(false);
+    }
+  }, []);
+
   const loginUser = (loggedInUser: AuthUser, loggedInStore: AuthStore | null) => {
     setUser(loggedInUser);
     setStore(loggedInStore);
@@ -327,6 +382,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     fetchProducts();
     fetchCategories();
     fetchStock();
+    fetchTransactions();
   };
 
   const logoutUser = async () => {
@@ -340,6 +396,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setStoreInfo(DEFAULT_STORE_INFO);
     setProducts([]);
     setCategories([]);
+    setTransactions([]);
   };
 
   const checkAuthSession = async (): Promise<boolean> => {
@@ -475,6 +532,43 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return newTrx;
   };
 
+  // Create cash transaction on database and sync state
+  const createCashTransaction = async (params: {
+    items: Array<{ productId: number; quantity: number }>;
+    paidAmount: number;
+  }): Promise<{ success: boolean; data?: Transaction; error?: string }> => {
+    try {
+      const res = await createCashTransactionApi({
+        paymentMethod: 'cash',
+        items: params.items,
+        paidAmount: params.paidAmount,
+      });
+
+      if (res.success && res.data) {
+        const mapped = mapBackendTransaction(res.data);
+        setTransactions((prev) => [
+          mapped,
+          ...prev.filter((t) => t.id !== mapped.id),
+        ]);
+        // Re-sync store products, stock, and transactions with server
+        fetchProducts();
+        fetchStock();
+        fetchTransactions();
+        return { success: true, data: mapped };
+      }
+
+      return {
+        success: false,
+        error: res.error || 'Gagal memproses transaksi tunai.',
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        error: err?.message || 'Terjadi kesalahan saat memproses transaksi.',
+      };
+    }
+  };
+
   // Mark an existing pending transaction as paid (QRIS success or resume paid)
   // PREVENTS DUPLICATE STOCK DEDUCTION via paidAt flag and status check
   const markTransactionPaid = (transactionId: string) => {
@@ -592,7 +686,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         notifications,
         unreadCount,
         transactions,
+        isLoadingTransactions,
+        transactionsError,
+        fetchTransactions,
         createTransaction,
+        createCashTransaction,
         markTransactionPaid,
         cancelTransaction,
         user,

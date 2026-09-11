@@ -26,13 +26,18 @@ import { Transaction } from '@/constants/transaction-data';
 import { useStore } from '@/context/store-context';
 
 export default function PosScreen() {
-  const { products, createTransaction } = useStore();
+  const { products, categories, createTransaction } = useStore();
 
   // Local temporary states
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ProductCategory>('Semua');
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartModalVisible, setIsCartModalVisible] = useState(false);
+
+  // Dynamic category list from database
+  const categoryNames = useMemo(() => {
+    return ['Semua', ...categories.map((c) => c.name)];
+  }, [categories]);
 
   // QRIS Payment Modal states
   const [activeQrisTrx, setActiveQrisTrx] = useState<Transaction | null>(null);
@@ -64,12 +69,15 @@ export default function PosScreen() {
 
   // Cart operations
   const handleAddToCart = (product: Product) => {
+    if (product.stock <= 0) return;
     setCartItems((prevItems) => {
       const existingIndex = prevItems.findIndex(
         (item) => item.product.id === product.id
       );
       if (existingIndex > -1) {
-        // Increment quantity of existing item
+        if (prevItems[existingIndex].quantity >= product.stock) {
+          return prevItems;
+        }
         const updated = [...prevItems];
         updated[existingIndex] = {
           ...updated[existingIndex],
@@ -77,18 +85,21 @@ export default function PosScreen() {
         };
         return updated;
       }
-      // Add as new item
       return [...prevItems, { product, quantity: 1 }];
     });
   };
 
   const handleIncrementQuantity = (productId: string) => {
     setCartItems((prevItems) =>
-      prevItems.map((item) =>
-        item.product.id === productId
-          ? { ...item, quantity: item.quantity + 1 }
-          : item
-      )
+      prevItems.map((item) => {
+        if (item.product.id === productId) {
+          if (item.quantity >= item.product.stock) {
+            return item;
+          }
+          return { ...item, quantity: item.quantity + 1 };
+        }
+        return item;
+      })
     );
   };
 
@@ -197,6 +208,7 @@ export default function PosScreen() {
       <CategorySelector
         selectedCategory={selectedCategory}
         onSelectCategory={setSelectedCategory}
+        categories={categoryNames}
       />
 
       {/* Product List */}

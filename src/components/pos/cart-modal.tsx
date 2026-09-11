@@ -15,6 +15,7 @@ import {
 import { WarungkuColors } from '@/constants/colors';
 import { CartItem, formatRupiah } from '@/constants/pos-data';
 import { AppIcon } from '@/components/ui/app-icon';
+import { Transaction } from '@/constants/transaction-data';
 import { useStore } from '@/context/store-context';
 
 type ModalStep = 'cart' | 'summary' | 'processing' | 'success';
@@ -46,11 +47,13 @@ export function CartModal({
   onClearCart,
   onProceedToQris,
 }: CartModalProps) {
-  const { createTransaction } = useStore();
+  const { createCashTransaction } = useStore();
   const [step, setStep] = useState<ModalStep>('cart');
   const [paymentMethod, setPaymentMethod] = useState<'Tunai' | 'QRIS'>('Tunai');
   const [cashGiven, setCashGiven] = useState<number>(0);
   const [cashInput, setCashInput] = useState<string>('');
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [completedTrx, setCompletedTrx] = useState<Transaction | null>(null);
 
   // Calculations for cash payment & change
   const change = cashGiven - totalPrice;
@@ -64,11 +67,14 @@ export function CartModal({
     setCashGiven(0);
     setCashInput('');
     setPaymentMethod('Tunai');
+    setPaymentError(null);
+    setCompletedTrx(null);
     onClose();
   };
 
   // Handle manual input of buyer cash
   const handleCashInputChange = (text: string) => {
+    setPaymentError(null);
     const cleanDigits = text.replace(/[^0-9]/g, '');
     if (!cleanDigits) {
       setCashGiven(0);
@@ -82,29 +88,34 @@ export function CartModal({
 
   // Handle quick nominal tap (Uang Pas, 10k, 20k, 50k, 100k)
   const handleSelectNominal = (amount: number) => {
+    setPaymentError(null);
     setCashGiven(amount);
     setCashInput(formatRupiah(amount));
   };
 
-  // Process simulated payment for cash
-  const handleConfirmPayment = () => {
+  // Process cash payment via backend database API
+  const handleConfirmPayment = async () => {
     if (!isValidPayment) return;
-    const trxItems = cartItems.map((it) => ({
-      productName: it.product.name,
-      quantity: it.quantity,
-      price: it.product.price,
-      subtotal: it.product.price * it.quantity,
-    }));
-    createTransaction({
-      items: trxItems,
-      total: totalPrice,
-      paymentMethod: 'Tunai',
-      paymentStatus: 'Lunas',
-    });
+    setPaymentError(null);
     setStep('processing');
-    setTimeout(() => {
+
+    const payloadItems = cartItems.map((it) => ({
+      productId: Number(it.product.id),
+      quantity: it.quantity,
+    }));
+
+    const res = await createCashTransaction({
+      items: payloadItems,
+      paidAmount: cashGiven,
+    });
+
+    if (res.success && res.data) {
+      setCompletedTrx(res.data);
       setStep('success');
-    }, 1000);
+    } else {
+      setPaymentError(res.error || 'Pembayaran gagal diproses.');
+      setStep('summary');
+    }
   };
 
   // Finish transaction and clean up
@@ -113,6 +124,8 @@ export function CartModal({
     setCashGiven(0);
     setCashInput('');
     setPaymentMethod('Tunai');
+    setPaymentError(null);
+    setCompletedTrx(null);
     setStep('cart');
     onClose();
   };
@@ -609,6 +622,17 @@ export function CartModal({
 
                 {/* Actions */}
                 <View style={styles.footerContainer}>
+                  {paymentError && (
+                    <View style={styles.errorAlertCard}>
+                      <AppIcon
+                        name="alert-triangle"
+                        size={16}
+                        color={WarungkuColors.error}
+                      />
+                      <Text style={styles.errorAlertText}>{paymentError}</Text>
+                    </View>
+                  )}
+
                   {paymentMethod === 'Tunai' ? (
                     <TouchableOpacity
                       style={[
@@ -680,7 +704,9 @@ export function CartModal({
 
                 <Text style={styles.successTitle}>Pembayaran Berhasil</Text>
                 <Text style={styles.successSubtitle}>
-                  Transaksi tunai berhasil diproses.
+                  {completedTrx
+                    ? `Transaksi #${completedTrx.id} berhasil diproses.`
+                    : 'Transaksi tunai berhasil diproses.'}
                 </Text>
 
                 {/* Full Receipt Breakdown */}
@@ -688,7 +714,7 @@ export function CartModal({
                   <View style={styles.receiptRow}>
                     <Text style={styles.receiptLabel}>Total</Text>
                     <Text style={styles.receiptValue}>
-                      {formatRupiah(totalPrice)}
+                      {formatRupiah(completedTrx ? completedTrx.total : totalPrice)}
                     </Text>
                   </View>
                   <View style={styles.receiptRow}>
@@ -700,7 +726,11 @@ export function CartModal({
                   <View style={[styles.receiptRow, styles.receiptRowHighlight]}>
                     <Text style={styles.receiptHighlightLabel}>Kembalian</Text>
                     <Text style={styles.receiptHighlightValue}>
-                      {formatRupiah(change)}
+                      {formatRupiah(
+                        completedTrx
+                          ? cashGiven - completedTrx.total
+                          : change,
+                      )}
                     </Text>
                   </View>
                   <View style={styles.receiptDivider} />
@@ -1364,5 +1394,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: WarungkuColors.success,
+  },
+  errorAlertCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginBottom: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+  },
+  errorAlertText: {
+    fontSize: 13,
+    color: WarungkuColors.error,
+    fontWeight: '600',
+    flex: 1,
   },
 });
