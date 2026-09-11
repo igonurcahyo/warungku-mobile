@@ -23,7 +23,9 @@ export type AppIconName =
   | 'x'
   | 'cart'
   | 'check-circle'
-  | 'edit';
+  | 'edit'
+  | 'calendar'
+  | 'qr-code';
 
 interface AppIconProps {
   name: AppIconName;
@@ -742,6 +744,82 @@ export function AppIcon({ name, size = 22, color = '#181C1A', focused = false }:
               bottom: s * 0.15,
             }}
           />
+        </View>
+      );
+
+    case 'calendar':
+      return (
+        <View style={[styles.center, { width: s, height: s }]}>
+          {/* Top binder rings */}
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              width: s * 0.5,
+              marginBottom: 1,
+            }}
+          >
+            <View style={{ width: 2, height: 3, backgroundColor: color, borderRadius: 1 }} />
+            <View style={{ width: 2, height: 3, backgroundColor: color, borderRadius: 1 }} />
+          </View>
+          {/* Calendar page */}
+          <View
+            style={{
+              width: s * 0.75,
+              height: s * 0.65,
+              borderWidth: stroke,
+              borderColor: color,
+              borderRadius: 3,
+              padding: 2,
+              alignItems: 'center',
+            }}
+          >
+            <View
+              style={{
+                width: '100%',
+                height: 2,
+                backgroundColor: color,
+                borderRadius: 1,
+                marginBottom: 2,
+              }}
+            />
+            <View
+              style={{
+                flexDirection: 'row',
+                gap: 2.5,
+              }}
+            >
+              <View style={{ width: 2, height: 2, borderRadius: 1, backgroundColor: color }} />
+              <View style={{ width: 2, height: 2, borderRadius: 1, backgroundColor: color }} />
+              <View style={{ width: 2, height: 2, borderRadius: 1, backgroundColor: color }} />
+            </View>
+          </View>
+        </View>
+      );
+
+    case 'qr-code':
+      return (
+        <View style={[styles.center, { width: s, height: s }]}>
+          <View
+            style={{
+              width: s * 0.75,
+              height: s * 0.75,
+              borderWidth: stroke,
+              borderColor: color,
+              borderRadius: 3,
+              padding: 2,
+              justifyContent: 'space-between',
+            }}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <View style={{ width: 3.5, height: 3.5, backgroundColor: color, borderRadius: 1 }} />
+              <View style={{ width: 3.5, height: 3.5, backgroundColor: color, borderRadius: 1 }} />
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <View style={{ width: 3.5, height: 3.5, backgroundColor: color, borderRadius: 1 }} />
+              <View style={{ width: 2.5, height: 2.5, backgroundColor: color, borderRadius: 1 }} />
+            </View>
+          </View>
         </View>
       );
 
