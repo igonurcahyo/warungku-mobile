@@ -16,9 +16,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { WarungkuColors } from '@/constants/colors';
 import { WarungkuLogo } from '@/components/warungku-logo';
+import { loginApi } from '@/api/auth';
+import { useStore } from '@/context/store-context';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { loginUser } = useStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -29,8 +32,9 @@ export default function LoginScreen() {
   const [passwordError, setPasswordError] = useState('');
   const [focusedField, setFocusedField] = useState<'email' | 'password' | null>(null);
 
-  // Simulation feedback state
-  const [simulationSuccess, setSimulationSuccess] = useState(false);
+  // Auth feedback state
+  const [authError, setAuthError] = useState('');
+  const [loginSuccess, setLoginSuccess] = useState(false);
 
   const validateEmail = (value: string): string => {
     const trimmed = value.trim();
@@ -59,6 +63,7 @@ export default function LoginScreen() {
     if (emailError) {
       setEmailError(validateEmail(text));
     }
+    if (authError) setAuthError('');
   };
 
   const handlePasswordChange = (text: string) => {
@@ -66,11 +71,13 @@ export default function LoginScreen() {
     if (passwordError) {
       setPasswordError(validatePassword(text));
     }
+    if (authError) setAuthError('');
   };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     Keyboard.dismiss();
-    setSimulationSuccess(false);
+    setAuthError('');
+    setLoginSuccess(false);
 
     const errEmail = validateEmail(email);
     const errPass = validatePassword(password);
@@ -82,13 +89,32 @@ export default function LoginScreen() {
       return;
     }
 
-    // UI-only simulation
     setIsLoading(true);
-    setTimeout(() => {
+    try {
+      const result = await loginApi({
+        email: email.trim(),
+        password,
+      });
+
+      if (!result.success || !result.user) {
+        setAuthError(result.error || 'Login gagal, periksa email dan kata sandi Anda.');
+        setIsLoading(false);
+        return;
+      }
+
+      // Success: Save auth state to context
+      loginUser(result.user, result.store ?? null);
+      setLoginSuccess(true);
       setIsLoading(false);
-      setSimulationSuccess(true);
-      router.replace('/(tabs)');
-    }, 1200);
+
+      // Navigate to tabs dashboard
+      setTimeout(() => {
+        router.replace('/(tabs)');
+      }, 500);
+    } catch (err: any) {
+      setIsLoading(false);
+      setAuthError(err?.message || 'Gagal menghubungi server backend.');
+    }
   };
 
   return (
@@ -114,10 +140,18 @@ export default function LoginScreen() {
 
             {/* Form Card */}
             <View style={styles.card}>
-              {/* Simulation Banner */}
-              {simulationSuccess && (
+              {/* Error Banner */}
+              {!!authError && (
+                <View style={styles.errorBanner}>
+                  <Text style={styles.errorBannerTitle}>Gagal Masuk</Text>
+                  <Text style={styles.errorBannerSubtitle}>{authError}</Text>
+                </View>
+              )}
+
+              {/* Success Banner */}
+              {loginSuccess && (
                 <View style={styles.successBanner}>
-                  <Text style={styles.successBannerTitle}>Login Berhasil (Simulasi UI)</Text>
+                  <Text style={styles.successBannerTitle}>Login Berhasil</Text>
                   <Text style={styles.successBannerSubtitle}>
                     Selamat datang kembali, {email.trim()}!
                   </Text>
@@ -296,6 +330,24 @@ const styles = StyleSheet.create({
     elevation: 2,
     borderWidth: 1,
     borderColor: WarungkuColors.surfaceContainer,
+  },
+  errorBanner: {
+    backgroundColor: WarungkuColors.errorContainer,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+  },
+  errorBannerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: WarungkuColors.error,
+  },
+  errorBannerSubtitle: {
+    fontSize: 12,
+    color: WarungkuColors.error,
+    marginTop: 2,
   },
   successBanner: {
     backgroundColor: WarungkuColors.successContainer,

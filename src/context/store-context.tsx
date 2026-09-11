@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useMemo, ReactNode, useEffect } from 'react';
 import { DUMMY_PRODUCTS, Product } from '@/constants/pos-data';
 import {
   Transaction,
@@ -7,6 +7,8 @@ import {
   PaymentStatus,
   DUMMY_TRANSACTIONS,
 } from '@/constants/transaction-data';
+import { AuthUser, AuthStore, getMeApi, logoutApi } from '@/api/auth';
+import { getAuthToken } from '@/api/client';
 
 export interface StockNotification {
   id: string;
@@ -51,6 +53,13 @@ interface StoreContextType {
   createTransaction: (params: CreateTransactionParams) => Transaction;
   markTransactionPaid: (transactionId: string) => void;
   cancelTransaction: (transactionId: string) => void;
+  // Auth state
+  user: AuthUser | null;
+  store: AuthStore | null;
+  isAuthenticated: boolean;
+  loginUser: (user: AuthUser, store: AuthStore | null) => void;
+  logoutUser: () => Promise<void>;
+  checkAuthSession: () => Promise<boolean>;
 }
 
 const DEFAULT_STORE_INFO: StoreInfo = {
@@ -80,8 +89,53 @@ const StoreContext = createContext<StoreContextType | undefined>(undefined);
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [products, setProducts] = useState<Product[]>(DUMMY_PRODUCTS);
   const [stockNotificationEnabled, setStockNotificationEnabled] = useState(true);
-  const [storeInfo] = useState<StoreInfo>(DEFAULT_STORE_INFO);
+  const [storeInfo, setStoreInfo] = useState<StoreInfo>(DEFAULT_STORE_INFO);
   const [transactions, setTransactions] = useState<Transaction[]>(DUMMY_TRANSACTIONS);
+
+  // Mobile Auth State
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [store, setStore] = useState<AuthStore | null>(null);
+
+  const loginUser = (loggedInUser: AuthUser, loggedInStore: AuthStore | null) => {
+    setUser(loggedInUser);
+    setStore(loggedInStore);
+    setStoreInfo((prev) => ({
+      ...prev,
+      name: loggedInStore?.name || prev.name,
+      owner: loggedInUser.name || prev.owner,
+      email: loggedInUser.email || prev.email,
+    }));
+  };
+
+  const logoutUser = async () => {
+    try {
+      await logoutApi();
+    } catch {
+      // ignore
+    }
+    setUser(null);
+    setStore(null);
+    setStoreInfo(DEFAULT_STORE_INFO);
+  };
+
+  const checkAuthSession = async (): Promise<boolean> => {
+    const token = getAuthToken();
+    if (!token) return false;
+    try {
+      const res = await getMeApi(token);
+      if (res.success && res.user) {
+        loginUser(res.user, res.store ?? null);
+        return true;
+      }
+    } catch {
+      // ignore
+    }
+    return false;
+  };
+
+  useEffect(() => {
+    checkAuthSession();
+  }, []);
 
   // Quick increment stock (+1)
   const incrementStock = (productId: string) => {
@@ -260,6 +314,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         createTransaction,
         markTransactionPaid,
         cancelTransaction,
+        user,
+        store,
+        isAuthenticated: !!user,
+        loginUser,
+        logoutUser,
+        checkAuthSession,
       }}
     >
       {children}

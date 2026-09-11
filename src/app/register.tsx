@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { WarungkuColors } from '@/constants/colors';
 import { WarungkuLogo } from '@/components/warungku-logo';
+import { registerApi } from '@/api/auth';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -40,8 +41,9 @@ export default function RegisterScreen() {
   const [passwordError, setPasswordError] = useState('');
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
 
-  // Simulation state
+  // API Feedback state
   const [registerSuccess, setRegisterSuccess] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   // Field validators
   const validateOwnerName = (val: string): string => {
@@ -96,6 +98,7 @@ export default function RegisterScreen() {
     if (ownerNameError) {
       setOwnerNameError(validateOwnerName(text));
     }
+    if (errorMsg) setErrorMsg('');
   };
 
   const handleStoreNameChange = (text: string) => {
@@ -103,6 +106,7 @@ export default function RegisterScreen() {
     if (storeNameError) {
       setStoreNameError(validateStoreName(text));
     }
+    if (errorMsg) setErrorMsg('');
   };
 
   const handleEmailChange = (text: string) => {
@@ -110,6 +114,7 @@ export default function RegisterScreen() {
     if (emailError) {
       setEmailError(validateEmail(text));
     }
+    if (errorMsg) setErrorMsg('');
   };
 
   const handlePasswordChange = (text: string) => {
@@ -120,6 +125,7 @@ export default function RegisterScreen() {
     if (confirmPassword && confirmPasswordError) {
       setConfirmPasswordError(validateConfirmPassword(confirmPassword, text));
     }
+    if (errorMsg) setErrorMsg('');
   };
 
   const handleConfirmPasswordChange = (text: string) => {
@@ -127,11 +133,13 @@ export default function RegisterScreen() {
     if (confirmPasswordError) {
       setConfirmPasswordError(validateConfirmPassword(text, password));
     }
+    if (errorMsg) setErrorMsg('');
   };
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     Keyboard.dismiss();
     setRegisterSuccess(false);
+    setErrorMsg('');
 
     const errOwner = validateOwnerName(ownerName);
     const errStore = validateStoreName(storeName);
@@ -149,12 +157,28 @@ export default function RegisterScreen() {
       return;
     }
 
-    // UI-only simulation
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const result = await registerApi({
+        name: ownerName.trim(),
+        storeName: storeName.trim(),
+        email: email.trim(),
+        password,
+        passwordConfirmation: confirmPassword,
+      });
+
+      if (!result.success) {
+        setErrorMsg(result.error || 'Pendaftaran gagal. Silakan coba lagi.');
+        setIsLoading(false);
+        return;
+      }
+
       setRegisterSuccess(true);
-    }, 1500);
+      setIsLoading(false);
+    } catch (err: any) {
+      setIsLoading(false);
+      setErrorMsg(err?.message || 'Gagal menghubungi server.');
+    }
   };
 
   return (
@@ -180,12 +204,18 @@ export default function RegisterScreen() {
 
             {/* Form Card */}
             <View style={styles.card}>
-              {/* Simulation Success Banner */}
+              {/* Error Banner */}
+              {!!errorMsg && (
+                <View style={styles.errorBanner}>
+                  <Text style={styles.errorBannerTitle}>Pendaftaran Gagal</Text>
+                  <Text style={styles.errorBannerSubtitle}>{errorMsg}</Text>
+                </View>
+              )}
+
+              {/* Success Banner */}
               {registerSuccess && (
                 <View style={styles.successBanner}>
-                  <Text style={styles.successBannerTitle}>
-                    Pendaftaran Berhasil (Simulasi UI)
-                  </Text>
+                  <Text style={styles.successBannerTitle}>Pendaftaran Berhasil</Text>
                   <Text style={styles.successBannerSubtitle}>
                     Akun pemilik &ldquo;{ownerName.trim()}&rdquo; untuk warung &ldquo;{storeName.trim()}&rdquo; berhasil didaftarkan.
                   </Text>
@@ -373,9 +403,12 @@ export default function RegisterScreen() {
 
               {/* Submit Button */}
               <TouchableOpacity
-                style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
+                style={[
+                  styles.submitButton,
+                  (isLoading || registerSuccess) && styles.submitButtonDisabled,
+                ]}
                 onPress={handleRegister}
-                disabled={isLoading}
+                disabled={isLoading || registerSuccess}
                 activeOpacity={0.85}
               >
                 {isLoading ? (
@@ -459,6 +492,25 @@ const styles = StyleSheet.create({
     elevation: 2,
     borderWidth: 1,
     borderColor: WarungkuColors.surfaceContainer,
+  },
+  errorBanner: {
+    backgroundColor: WarungkuColors.errorContainer,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+  },
+  errorBannerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: WarungkuColors.error,
+  },
+  errorBannerSubtitle: {
+    fontSize: 12,
+    color: WarungkuColors.error,
+    marginTop: 3,
+    lineHeight: 16,
   },
   successBanner: {
     backgroundColor: WarungkuColors.successContainer,

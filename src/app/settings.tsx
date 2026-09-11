@@ -21,14 +21,15 @@ export default function SettingsScreen() {
     storeInfo,
     stockNotificationEnabled,
     setStockNotificationEnabled,
+    logoutUser,
   } = useStore();
 
   const [isLogoutModalVisible, setIsLogoutModalVisible] = useState(false);
 
-  const handleConfirmLogout = () => {
+  const handleConfirmLogout = async () => {
     setIsLogoutModalVisible(false);
-    // Simulation: Navigate back to Login screen
-    router.replace('/login');
+    await logoutUser();
+    router.replace('/');
   };
 
   return (
