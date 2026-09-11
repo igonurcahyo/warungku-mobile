@@ -25,7 +25,10 @@ export type AppIconName =
   | 'check-circle'
   | 'edit'
   | 'calendar'
-  | 'qr-code';
+  | 'qr-code'
+  | 'bar-chart'
+  | 'arrow-left'
+  | 'award';
 
 interface AppIconProps {
   name: AppIconName;
@@ -819,6 +822,88 @@ export function AppIcon({ name, size = 22, color = '#181C1A', focused = false }:
               <View style={{ width: 3.5, height: 3.5, backgroundColor: color, borderRadius: 1 }} />
               <View style={{ width: 2.5, height: 2.5, backgroundColor: color, borderRadius: 1 }} />
             </View>
+          </View>
+        </View>
+      );
+
+    case 'bar-chart':
+      return (
+        <View
+          style={[
+            styles.center,
+            {
+              width: s,
+              height: s,
+              flexDirection: 'row',
+              alignItems: 'flex-end',
+              justifyContent: 'center',
+              gap: 3,
+            },
+          ]}
+        >
+          <View style={{ width: 3.5, height: s * 0.4, backgroundColor: color, borderRadius: 1.5 }} />
+          <View style={{ width: 3.5, height: s * 0.75, backgroundColor: color, borderRadius: 1.5 }} />
+          <View style={{ width: 3.5, height: s * 0.55, backgroundColor: color, borderRadius: 1.5 }} />
+          <View style={{ width: 3.5, height: s * 0.85, backgroundColor: color, borderRadius: 1.5 }} />
+        </View>
+      );
+
+    case 'arrow-left':
+      return (
+        <View style={[styles.center, { width: s, height: s, flexDirection: 'row' }]}>
+          <View
+            style={{
+              width: s * 0.3,
+              height: s * 0.3,
+              borderTopWidth: stroke,
+              borderLeftWidth: stroke,
+              borderColor: color,
+              transform: [{ rotate: '-45deg' }],
+              marginRight: -s * 0.15,
+            }}
+          />
+          <View
+            style={{
+              width: s * 0.5,
+              height: stroke,
+              backgroundColor: color,
+              borderRadius: 1,
+            }}
+          />
+        </View>
+      );
+
+    case 'award':
+      return (
+        <View style={[styles.center, { width: s, height: s }]}>
+          <View
+            style={{
+              width: s * 0.55,
+              height: s * 0.55,
+              borderRadius: (s * 0.55) / 2,
+              borderWidth: stroke,
+              borderColor: color,
+              backgroundColor: focused ? color : 'transparent',
+              marginBottom: 1,
+            }}
+          />
+          <View style={{ flexDirection: 'row', gap: 3 }}>
+            <View
+              style={{
+                width: stroke,
+                height: s * 0.28,
+                backgroundColor: color,
+                transform: [{ rotate: '20deg' }],
+              }}
+            />
+            <View
+              style={{
+                width: stroke,
+                height: s * 0.28,
+                backgroundColor: color,
+                transform: [{ rotate: '-20deg' }],
+              }}
+            />
           </View>
         </View>
       );

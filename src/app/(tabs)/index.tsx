@@ -79,7 +79,13 @@ export default function DashboardScreen() {
         {/* Summary Cards Grid (2x2) */}
         <View style={styles.summaryGrid}>
           {/* Penjualan Hari Ini */}
-          <View style={[styles.summaryCard, styles.salesCard]}>
+          <TouchableOpacity
+            style={[styles.summaryCard, styles.salesCard]}
+            activeOpacity={0.8}
+            onPress={() => router.navigate('/report')}
+            accessibilityLabel="Lihat Laporan Penjualan"
+            accessibilityRole="button"
+          >
             <View style={styles.summaryHeader}>
               <Text style={styles.summaryLabel}>Penjualan Hari Ini</Text>
               <View style={styles.summaryIconBadge}>
@@ -87,8 +93,11 @@ export default function DashboardScreen() {
               </View>
             </View>
             <Text style={styles.summaryValuePrimary}>Rp 1.250.000</Text>
-            <Text style={styles.summarySubtext}>Ringkasan kasir hari ini</Text>
-          </View>
+            <View style={styles.summaryCardFooter}>
+              <Text style={styles.summarySubtext}>Ringkasan kasir hari ini</Text>
+              <Text style={styles.summaryLinkText}>Laporan →</Text>
+            </View>
+          </TouchableOpacity>
 
           {/* Transaksi Hari Ini */}
           <View style={styles.summaryCard}>
@@ -143,9 +152,9 @@ export default function DashboardScreen() {
               onPress={() => router.navigate('/(tabs)/pos')}
             >
               <View style={[styles.quickActionIcon, { backgroundColor: WarungkuColors.primary }]}>
-                <AppIcon name="pos" size={22} color={WarungkuColors.onPrimary} focused />
+                <AppIcon name="pos" size={20} color={WarungkuColors.onPrimary} focused />
               </View>
-              <Text style={styles.quickActionLabel}>Buka Kasir</Text>
+              <Text style={styles.quickActionLabel}>Kasir</Text>
             </TouchableOpacity>
 
             {/* Kelola Produk */}
@@ -155,9 +164,9 @@ export default function DashboardScreen() {
               onPress={() => router.navigate('/(tabs)/products')}
             >
               <View style={[styles.quickActionIcon, { backgroundColor: WarungkuColors.primaryContainer }]}>
-                <AppIcon name="products" size={22} color={WarungkuColors.onPrimary} focused />
+                <AppIcon name="products" size={20} color={WarungkuColors.onPrimary} focused />
               </View>
-              <Text style={styles.quickActionLabel}>Kelola Produk</Text>
+              <Text style={styles.quickActionLabel}>Produk</Text>
             </TouchableOpacity>
 
             {/* Kelola Stok */}
@@ -167,9 +176,21 @@ export default function DashboardScreen() {
               onPress={() => router.navigate('/(tabs)/stock')}
             >
               <View style={[styles.quickActionIcon, { backgroundColor: WarungkuColors.secondary }]}>
-                <AppIcon name="stock" size={22} color={WarungkuColors.onPrimary} focused />
+                <AppIcon name="stock" size={20} color={WarungkuColors.onPrimary} focused />
               </View>
-              <Text style={styles.quickActionLabel}>Kelola Stok</Text>
+              <Text style={styles.quickActionLabel}>Stok</Text>
+            </TouchableOpacity>
+
+            {/* Laporan Penjualan */}
+            <TouchableOpacity
+              style={styles.quickActionCard}
+              activeOpacity={0.75}
+              onPress={() => router.navigate('/report')}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: '#004532' }]}>
+                <AppIcon name="bar-chart" size={20} color={WarungkuColors.onPrimary} focused />
+              </View>
+              <Text style={styles.quickActionLabel}>Laporan</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -416,21 +437,32 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: WarungkuColors.primary,
   },
+  summaryCardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  summaryLinkText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: WarungkuColors.primary,
+  },
   quickActionRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
     marginTop: 12,
   },
   quickActionCard: {
     flex: 1,
     backgroundColor: WarungkuColors.card,
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 10,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: WarungkuColors.outlineVariant,
-    minHeight: 100,
+    minHeight: 90,
     justifyContent: 'center',
     shadowColor: WarungkuColors.primary,
     shadowOffset: { width: 0, height: 2 },
@@ -439,12 +471,12 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   quickActionIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.12,
@@ -452,7 +484,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   quickActionLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: WarungkuColors.text,
     textAlign: 'center',
