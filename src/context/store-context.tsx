@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useMemo, ReactNode, useEffect } from 'react';
-import { DUMMY_PRODUCTS, Product } from '@/constants/pos-data';
+import React, { createContext, useContext, useState, useMemo, ReactNode, useEffect, useCallback } from 'react';
+import { Product } from '@/constants/pos-data';
 import {
   Transaction,
   TransactionItem,
@@ -9,6 +9,21 @@ import {
 } from '@/constants/transaction-data';
 import { AuthUser, AuthStore, getMeApi, logoutApi } from '@/api/auth';
 import { getAuthToken } from '@/api/client';
+import {
+  CategoryItem,
+  getCategoriesApi,
+  createCategoryApi,
+  updateCategoryApi,
+  deleteCategoryApi,
+} from '@/api/categories';
+import {
+  BackendProduct,
+  ProductPayload,
+  getProductsApi,
+  createProductApi,
+  updateProductApi,
+  deleteProductApi,
+} from '@/api/products';
 
 export interface StockNotification {
   id: string;
@@ -37,9 +52,40 @@ interface CreateTransactionParams {
   paymentStatus: PaymentStatus;
 }
 
+function mapBackendProduct(bp: BackendProduct): Product {
+  return {
+    id: String(bp.id),
+    name: bp.name,
+    price: bp.sellingPrice ?? bp.price,
+    category: bp.categoryName || 'Lainnya',
+    stock: bp.stock,
+    categoryId: bp.categoryId,
+    categoryName: bp.categoryName || 'Lainnya',
+    unit: bp.unit || 'Pcs',
+  };
+}
+
 interface StoreContextType {
   products: Product[];
   setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
+  categories: CategoryItem[];
+  isLoadingProducts: boolean;
+  isLoadingCategories: boolean;
+  productsError: string | null;
+  fetchProducts: () => Promise<void>;
+  fetchCategories: () => Promise<void>;
+  addProduct: (payload: ProductPayload) => Promise<{ success: boolean; data?: Product; error?: string }>;
+  updateProduct: (
+    id: string | number,
+    payload: ProductPayload
+  ) => Promise<{ success: boolean; data?: Product; error?: string }>;
+  deleteProduct: (id: string | number) => Promise<{ success: boolean; error?: string }>;
+  addCategory: (name: string) => Promise<{ success: boolean; data?: CategoryItem; error?: string }>;
+  updateCategory: (
+    id: number,
+    name: string
+  ) => Promise<{ success: boolean; data?: CategoryItem; error?: string }>;
+  deleteCategory: (id: number) => Promise<{ success: boolean; error?: string }>;
   incrementStock: (productId: string) => void;
   decrementStock: (productId: string) => void;
   saveStock: (productId: string, newStock: number) => void;
@@ -87,7 +133,12 @@ function formatIndonesianDateDisplay(d: Date): string {
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [products, setProducts] = useState<Product[]>(DUMMY_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<CategoryItem[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
+  const [productsError, setProductsError] = useState<string | null>(null);
+
   const [stockNotificationEnabled, setStockNotificationEnabled] = useState(true);
   const [storeInfo, setStoreInfo] = useState<StoreInfo>(DEFAULT_STORE_INFO);
   const [transactions, setTransactions] = useState<Transaction[]>(DUMMY_TRANSACTIONS);
@@ -95,6 +146,117 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Mobile Auth State
   const [user, setUser] = useState<AuthUser | null>(null);
   const [store, setStore] = useState<AuthStore | null>(null);
+
+  const fetchProducts = useCallback(async (): Promise<void> => {
+    setIsLoadingProducts(true);
+    setProductsError(null);
+    try {
+      const res = await getProductsApi();
+      if (res.success && res.data) {
+        setProducts(res.data.map(mapBackendProduct));
+      } else {
+        setProductsError(res.error || 'Gagal memuat produk dari server.');
+      }
+    } catch (err: any) {
+      setProductsError(err?.message || 'Gagal memuat produk.');
+    } finally {
+      setIsLoadingProducts(false);
+    }
+  }, []);
+
+  const fetchCategories = useCallback(async (): Promise<void> => {
+    setIsLoadingCategories(true);
+    try {
+      const res = await getCategoriesApi();
+      if (res.success && res.data) {
+        setCategories(res.data);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIsLoadingCategories(false);
+    }
+  }, []);
+
+  const addProduct = async (
+    payload: ProductPayload
+  ): Promise<{ success: boolean; data?: Product; error?: string }> => {
+    const res = await createProductApi(payload);
+    if (res.success && res.data) {
+      const newProd = mapBackendProduct(res.data);
+      setProducts((prev) => [newProd, ...prev]);
+      fetchCategories();
+      return { success: true, data: newProd };
+    }
+    return { success: false, error: res.error || 'Gagal menambahkan produk' };
+  };
+
+  const updateProduct = async (
+    id: string | number,
+    payload: ProductPayload
+  ): Promise<{ success: boolean; data?: Product; error?: string }> => {
+    const res = await updateProductApi(id, payload);
+    if (res.success && res.data) {
+      const updated = mapBackendProduct(res.data);
+      setProducts((prev) => prev.map((p) => (p.id === String(id) ? updated : p)));
+      fetchCategories();
+      return { success: true, data: updated };
+    }
+    return { success: false, error: res.error || 'Gagal memperbarui produk' };
+  };
+
+  const deleteProduct = async (
+    id: string | number
+  ): Promise<{ success: boolean; error?: string }> => {
+    const res = await deleteProductApi(id);
+    if (res.success) {
+      setProducts((prev) => prev.filter((p) => p.id !== String(id)));
+      fetchCategories();
+      return { success: true };
+    }
+    return { success: false, error: res.error || 'Gagal menghapus produk' };
+  };
+
+  const addCategory = async (
+    name: string
+  ): Promise<{ success: boolean; data?: CategoryItem; error?: string }> => {
+    const res = await createCategoryApi({ name });
+    if (res.success && res.data) {
+      setCategories((prev) =>
+        [...prev, res.data!].sort((a, b) => a.name.localeCompare(b.name))
+      );
+      return { success: true, data: res.data };
+    }
+    return { success: false, error: res.error || 'Gagal menambahkan kategori' };
+  };
+
+  const updateCategory = async (
+    id: number,
+    name: string
+  ): Promise<{ success: boolean; data?: CategoryItem; error?: string }> => {
+    const res = await updateCategoryApi(id, { name });
+    if (res.success && res.data) {
+      setCategories((prev) =>
+        prev
+          .map((c) => (c.id === id ? { ...c, name: res.data!.name } : c))
+          .sort((a, b) => a.name.localeCompare(b.name))
+      );
+      fetchProducts();
+      return { success: true, data: res.data };
+    }
+    return { success: false, error: res.error || 'Gagal memperbarui kategori' };
+  };
+
+  const deleteCategory = async (
+    id: number
+  ): Promise<{ success: boolean; error?: string }> => {
+    const res = await deleteCategoryApi(id);
+    if (res.success) {
+      setCategories((prev) => prev.filter((c) => c.id !== id));
+      return { success: true };
+    }
+    return { success: false, error: res.error || 'Gagal menghapus kategori' };
+  };
 
   const loginUser = (loggedInUser: AuthUser, loggedInStore: AuthStore | null) => {
     setUser(loggedInUser);
@@ -105,6 +267,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       owner: loggedInUser.name || prev.owner,
       email: loggedInUser.email || prev.email,
     }));
+    fetchProducts();
+    fetchCategories();
   };
 
   const logoutUser = async () => {
@@ -116,6 +280,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setStore(null);
     setStoreInfo(DEFAULT_STORE_INFO);
+    setProducts([]);
+    setCategories([]);
   };
 
   const checkAuthSession = async (): Promise<boolean> => {
@@ -302,6 +468,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       value={{
         products,
         setProducts,
+        categories,
+        isLoadingProducts,
+        isLoadingCategories,
+        productsError,
+        fetchProducts,
+        fetchCategories,
+        addProduct,
+        updateProduct,
+        deleteProduct,
+        addCategory,
+        updateCategory,
+        deleteCategory,
         incrementStock,
         decrementStock,
         saveStock,

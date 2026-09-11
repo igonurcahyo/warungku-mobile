@@ -6,12 +6,16 @@ import { CATEGORIES, ProductCategory } from '@/constants/pos-data';
 interface CategorySelectorProps {
   selectedCategory: ProductCategory;
   onSelectCategory: (category: ProductCategory) => void;
+  categories?: string[];
 }
 
 export function CategorySelector({
   selectedCategory,
   onSelectCategory,
+  categories,
 }: CategorySelectorProps) {
+  const categoryList = categories && categories.length > 0 ? categories : CATEGORIES;
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -19,7 +23,7 @@ export function CategorySelector({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {CATEGORIES.map((category) => {
+        {categoryList.map((category) => {
           const isActive = selectedCategory === category;
           return (
             <TouchableOpacity

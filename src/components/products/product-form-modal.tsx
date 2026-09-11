@@ -10,16 +10,29 @@ import {
   KeyboardAvoidingView,
   Platform,
   TouchableWithoutFeedback,
+  ActivityIndicator,
 } from 'react-native';
 import { WarungkuColors } from '@/constants/colors';
-import { Product, ProductCategory, FORM_CATEGORIES, formatRupiah } from '@/constants/pos-data';
+import { Product, formatRupiah } from '@/constants/pos-data';
 import { AppIcon } from '@/components/ui/app-icon';
+import { useStore } from '@/context/store-context';
+
+export interface ProductFormData {
+  id?: string;
+  name: string;
+  price: number;
+  stock: number;
+  categoryId: number;
+  category: string;
+  unit?: string;
+}
 
 interface ProductFormModalProps {
   visible: boolean;
   productToEdit?: Product | null;
   onClose: () => void;
-  onSave: (productData: Omit<Product, 'id'> & { id?: string }) => void;
+  onSave: (productData: ProductFormData) => Promise<boolean | void> | void;
+  isSaving?: boolean;
 }
 
 export function ProductFormModal({
@@ -27,14 +40,18 @@ export function ProductFormModal({
   productToEdit,
   onClose,
   onSave,
+  isSaving = false,
 }: ProductFormModalProps) {
   const isEditing = !!productToEdit;
+  const { categories } = useStore();
 
   // Form states
   const [name, setName] = useState('');
   const [priceInput, setPriceInput] = useState('');
-  const [category, setCategory] = useState<ProductCategory | ''>('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [selectedCategoryName, setSelectedCategoryName] = useState('');
   const [stockInput, setStockInput] = useState('');
+  const [submitError, setSubmitError] = useState('');
 
   // Validation errors
   const [nameError, setNameError] = useState('');
@@ -44,23 +61,49 @@ export function ProductFormModal({
 
   // Populate or reset form when modal opens or productToEdit changes
   useEffect(() => {
-    if (productToEdit) {
-      setName(productToEdit.name);
-      setPriceInput(productToEdit.price.toString());
-      setCategory(productToEdit.category);
-      setStockInput(productToEdit.stock.toString());
-    } else {
-      setName('');
-      setPriceInput('');
-      setCategory('');
-      setStockInput('');
+    if (visible) {
+      setSubmitError('');
+      if (productToEdit) {
+        setName(productToEdit.name);
+        setPriceInput(productToEdit.price.toString());
+        setStockInput(productToEdit.stock.toString());
+
+        // Find matched category in categories list
+        const matched = categories.find(
+          (c) =>
+            (productToEdit.categoryId && c.id === productToEdit.categoryId) ||
+            c.name.toLowerCase() === (productToEdit.category || '').toLowerCase()
+        );
+        if (matched) {
+          setSelectedCategoryId(matched.id);
+          setSelectedCategoryName(matched.name);
+        } else if (categories.length > 0) {
+          setSelectedCategoryId(categories[0].id);
+          setSelectedCategoryName(categories[0].name);
+        } else {
+          setSelectedCategoryId(null);
+          setSelectedCategoryName(productToEdit.category || '');
+        }
+      } else {
+        setName('');
+        setPriceInput('');
+        setStockInput('');
+        if (categories.length > 0) {
+          setSelectedCategoryId(categories[0].id);
+          setSelectedCategoryName(categories[0].name);
+        } else {
+          setSelectedCategoryId(null);
+          setSelectedCategoryName('');
+        }
+      }
+
+      // Clear errors
+      setNameError('');
+      setPriceError('');
+      setCategoryError('');
+      setStockError('');
     }
-    // Clear errors
-    setNameError('');
-    setPriceError('');
-    setCategoryError('');
-    setStockError('');
-  }, [productToEdit, visible]);
+  }, [productToEdit, visible, categories]);
 
   const handlePriceChange = (text: string) => {
     const rawDigits = text.replace(/[^0-9]/g, '');
@@ -74,12 +117,12 @@ export function ProductFormModal({
     if (stockError) setStockError('');
   };
 
-  const validateAndSubmit = () => {
+  const validateAndSubmit = async () => {
     let isValid = true;
 
     // Validate Name
     if (!name.trim()) {
-      setNameError('Nama produk wajib diisi');
+      setNameError('Nama produk wajib diisi.');
       isValid = false;
     } else {
       setNameError('');
@@ -87,12 +130,12 @@ export function ProductFormModal({
 
     // Validate Price
     if (!priceInput.trim()) {
-      setPriceError('Harga wajib diisi');
+      setPriceError('Harga wajib diisi.');
       isValid = false;
     } else {
       const numPrice = parseInt(priceInput, 10);
-      if (isNaN(numPrice) || numPrice <= 0) {
-        setPriceError('Harga harus lebih dari 0');
+      if (isNaN(numPrice) || numPrice < 0) {
+        setPriceError('Harga harus bernilai 0 atau lebih.');
         isValid = false;
       } else {
         setPriceError('');
@@ -100,8 +143,8 @@ export function ProductFormModal({
     }
 
     // Validate Category
-    if (!category || category === 'Semua') {
-      setCategoryError('Kategori wajib dipilih');
+    if (!selectedCategoryId) {
+      setCategoryError('Kategori wajib dipilih.');
       isValid = false;
     } else {
       setCategoryError('');
@@ -109,30 +152,39 @@ export function ProductFormModal({
 
     // Validate Stock
     if (!stockInput.trim()) {
-      setStockError('Stok wajib diisi');
+      setStockError('Stok wajib diisi.');
       isValid = false;
     } else {
       const numStock = parseInt(stockInput, 10);
       if (isNaN(numStock) || numStock < 0) {
-        setStockError('Stok tidak boleh kurang dari 0');
+        setStockError('Stok tidak boleh kurang dari 0.');
         isValid = false;
       } else {
         setStockError('');
       }
     }
 
-    if (!isValid) return;
+    if (!isValid || !selectedCategoryId) return;
 
-    // Form is valid: submit data
-    onSave({
-      id: productToEdit ? productToEdit.id : undefined,
-      name: name.trim(),
-      price: parseInt(priceInput, 10),
-      category: category as ProductCategory,
-      stock: parseInt(stockInput, 10),
-    });
+    try {
+      setSubmitError('');
+      const res = await onSave({
+        id: productToEdit ? productToEdit.id : undefined,
+        name: name.trim(),
+        price: parseInt(priceInput, 10),
+        categoryId: selectedCategoryId,
+        category: selectedCategoryName,
+        stock: parseInt(stockInput, 10),
+        unit: 'Pcs',
+      });
 
-    onClose();
+      // If onSave returns false, keep modal open
+      if (res !== false) {
+        onClose();
+      }
+    } catch (err: any) {
+      setSubmitError(err?.message || 'Gagal menyimpan produk.');
+    }
   };
 
   return (
@@ -243,34 +295,44 @@ export function ProductFormModal({
                 <Text style={styles.label}>
                   Kategori <Text style={styles.requiredMark}>*</Text>
                 </Text>
-                <View style={styles.categoryChipsRow}>
-                  {FORM_CATEGORIES.map((cat) => {
-                    const isSelected = category === cat;
-                    return (
-                      <TouchableOpacity
-                        key={cat}
-                        style={[
-                          styles.catChip,
-                          isSelected && styles.catChipSelected,
-                        ]}
-                        activeOpacity={0.75}
-                        onPress={() => {
-                          setCategory(cat);
-                          if (categoryError) setCategoryError('');
-                        }}
-                      >
-                        <Text
+
+                {categories.length === 0 ? (
+                  <View style={styles.noCategoryBox}>
+                    <Text style={styles.noCategoryText}>
+                      Belum ada kategori di warung Anda. Tambahkan kategori terlebih dahulu melalui menu Kelola Kategori.
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.categoryChipsRow}>
+                    {categories.map((cat) => {
+                      const isSelected = selectedCategoryId === cat.id;
+                      return (
+                        <TouchableOpacity
+                          key={cat.id}
                           style={[
-                            styles.catChipText,
-                            isSelected && styles.catChipTextSelected,
+                            styles.catChip,
+                            isSelected && styles.catChipSelected,
                           ]}
+                          activeOpacity={0.75}
+                          onPress={() => {
+                            setSelectedCategoryId(cat.id);
+                            setSelectedCategoryName(cat.name);
+                            if (categoryError) setCategoryError('');
+                          }}
                         >
-                          {cat}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
+                          <Text
+                            style={[
+                              styles.catChipText,
+                              isSelected && styles.catChipTextSelected,
+                            ]}
+                          >
+                            {cat.name}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
                 {!!categoryError && (
                   <Text style={styles.errorText}>{categoryError}</Text>
                 )}
@@ -301,23 +363,37 @@ export function ProductFormModal({
                 )}
               </View>
 
+              {/* General submit error */}
+              {!!submitError && (
+                <View style={styles.submitErrorBox}>
+                  <AppIcon name="alert-triangle" size={16} color={WarungkuColors.error} />
+                  <Text style={styles.submitErrorText}>{submitError}</Text>
+                </View>
+              )}
+
               {/* Action Button */}
               <View style={styles.buttonContainer}>
                 <TouchableOpacity
-                  style={styles.submitButton}
+                  style={[styles.submitButton, isSaving && styles.buttonDisabled]}
                   activeOpacity={0.85}
                   onPress={validateAndSubmit}
+                  disabled={isSaving}
                   accessibilityRole="button"
                 >
-                  <Text style={styles.submitButtonText}>
-                    {isEditing ? 'Simpan Perubahan' : 'Simpan Produk'}
-                  </Text>
+                  {isSaving ? (
+                    <ActivityIndicator size="small" color={WarungkuColors.onPrimary} />
+                  ) : (
+                    <Text style={styles.submitButtonText}>
+                      {isEditing ? 'Simpan Perubahan' : 'Simpan Produk'}
+                    </Text>
+                  )}
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={styles.cancelButton}
                   activeOpacity={0.7}
                   onPress={onClose}
+                  disabled={isSaving}
                 >
                   <Text style={styles.cancelButtonText}>Batal</Text>
                 </TouchableOpacity>
@@ -453,6 +529,18 @@ const styles = StyleSheet.create({
     color: WarungkuColors.error,
     marginTop: 6,
   },
+  noCategoryBox: {
+    padding: 12,
+    backgroundColor: WarungkuColors.surfaceLow,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: WarungkuColors.outlineVariant,
+  },
+  noCategoryText: {
+    fontSize: 12,
+    color: WarungkuColors.secondaryText,
+    lineHeight: 18,
+  },
   categoryChipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -481,6 +569,21 @@ const styles = StyleSheet.create({
   catChipTextSelected: {
     color: WarungkuColors.onPrimary,
   },
+  submitErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFEDEA',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 12,
+  },
+  submitErrorText: {
+    flex: 1,
+    fontSize: 12,
+    color: WarungkuColors.error,
+    fontWeight: '600',
+  },
   buttonContainer: {
     marginTop: 10,
     marginBottom: 24,
@@ -497,6 +600,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 6,
     elevation: 3,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   submitButtonText: {
     fontSize: 15,

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,32 +8,69 @@ import {
   TouchableOpacity,
   Keyboard,
   TouchableWithoutFeedback,
+  ActivityIndicator,
+  RefreshControl,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WarungkuColors } from '@/constants/colors';
-import {
-  Product,
-  ProductCategory,
-} from '@/constants/pos-data';
+import { Product } from '@/constants/pos-data';
 import { AppIcon } from '@/components/ui/app-icon';
 import { CategorySelector } from '@/components/pos/category-selector';
 import { ProductManagementCard } from '@/components/products/product-management-card';
-import { ProductFormModal } from '@/components/products/product-form-modal';
+import { ProductFormModal, ProductFormData } from '@/components/products/product-form-modal';
 import { DeleteConfirmModal } from '@/components/products/delete-confirm-modal';
+import { CategoryManagementModal } from '@/components/products/category-management-modal';
 import { useStore } from '@/context/store-context';
 
 export default function ProductsScreen() {
-  // Shared state for product list from context
-  const { products, setProducts } = useStore();
+  const {
+    products,
+    categories,
+    isLoadingProducts,
+    productsError,
+    fetchProducts,
+    fetchCategories,
+    addProduct,
+    updateProduct,
+    deleteProduct,
+    isAuthenticated,
+  } = useStore();
 
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<ProductCategory>('Semua');
+  const [selectedCategory, setSelectedCategory] = useState('Semua');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Modal states
   const [isFormModalVisible, setIsFormModalVisible] = useState(false);
+  const [isCategoryModalVisible, setIsCategoryModalVisible] = useState(false);
   const [productToEdit, setProductToEdit] = useState<Product | null>(null);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [isSavingProduct, setIsSavingProduct] = useState(false);
+
+  // Initial load
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchProducts();
+      fetchCategories();
+    }
+  }, [isAuthenticated, fetchProducts, fetchCategories]);
+
+  // Pull-to-refresh handler
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([fetchProducts(), fetchCategories()]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [fetchProducts, fetchCategories]);
+
+  // Dynamic category list for filter
+  const categoryNames = useMemo(() => {
+    return ['Semua', ...categories.map((c) => c.name)];
+  }, [categories]);
 
   // Filter products based on search query and category
   const filteredProducts = useMemo(() => {
@@ -42,7 +79,8 @@ export default function ProductsScreen() {
         .toLowerCase()
         .includes(searchQuery.trim().toLowerCase());
       const matchesCategory =
-        selectedCategory === 'Semua' || p.category === selectedCategory;
+        selectedCategory === 'Semua' ||
+        p.category.toLowerCase() === selectedCategory.toLowerCase();
       return matchesSearch && matchesCategory;
     });
   }, [products, searchQuery, selectedCategory]);
@@ -59,39 +97,50 @@ export default function ProductsScreen() {
     setIsFormModalVisible(true);
   };
 
-  // Save product (Add or Update)
-  const handleSaveProduct = (productData: Omit<Product, 'id'> & { id?: string }) => {
-    if (productData.id) {
-      // Update existing
-      setProducts((prev) =>
-        prev.map((p) =>
-          p.id === productData.id
-            ? {
-                ...p,
-                name: productData.name,
-                price: productData.price,
-                category: productData.category,
-                stock: productData.stock,
-              }
-            : p
-        )
-      );
-    } else {
-      // Add new
-      const newProduct: Product = {
-        id: `p_${Date.now()}`,
-        name: productData.name,
-        price: productData.price,
-        category: productData.category,
-        stock: productData.stock,
-      };
-      setProducts((prev) => [newProduct, ...prev]);
+  // Save product (Add or Update) via API
+  const handleSaveProduct = async (formData: ProductFormData) => {
+    setIsSavingProduct(true);
+    try {
+      if (formData.id) {
+        // Update existing
+        const res = await updateProduct(formData.id, {
+          name: formData.name,
+          price: formData.price,
+          stock: formData.stock,
+          categoryId: formData.categoryId,
+          unit: formData.unit || 'Pcs',
+        });
+        if (!res.success) {
+          Alert.alert('Gagal Memperbarui Produk', res.error || 'Terjadi kesalahan.');
+          return false;
+        }
+      } else {
+        // Add new
+        const res = await addProduct({
+          name: formData.name,
+          price: formData.price,
+          stock: formData.stock,
+          categoryId: formData.categoryId,
+          unit: formData.unit || 'Pcs',
+        });
+        if (!res.success) {
+          Alert.alert('Gagal Menambahkan Produk', res.error || 'Terjadi kesalahan.');
+          return false;
+        }
+      }
+      return true;
+    } finally {
+      setIsSavingProduct(false);
     }
   };
 
-  // Delete product
-  const handleDeleteProduct = (productId: string) => {
-    setProducts((prev) => prev.filter((p) => p.id !== productId));
+  // Delete product via API
+  const handleDeleteProduct = async (productId: string) => {
+    const res = await deleteProduct(productId);
+    if (!res.success) {
+      Alert.alert('Gagal Menghapus Produk', res.error || 'Terjadi kesalahan server.');
+    }
+    setProductToDelete(null);
   };
 
   return (
@@ -105,9 +154,22 @@ export default function ProductsScreen() {
           </Text>
         </View>
 
-        {/* Product Count Badge */}
-        <View style={styles.productCountBadge}>
-          <Text style={styles.productCountText}>{products.length} Produk</Text>
+        {/* Header Action Buttons */}
+        <View style={styles.headerActionContainer}>
+          <TouchableOpacity
+            style={styles.categoryManageBtn}
+            onPress={() => setIsCategoryModalVisible(true)}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Kelola kategori"
+          >
+            <AppIcon name="products" size={13} color={WarungkuColors.primary} />
+            <Text style={styles.categoryManageText}>Kategori</Text>
+          </TouchableOpacity>
+
+          <View style={styles.productCountBadge}>
+            <Text style={styles.productCountText}>{products.length} Produk</Text>
+          </View>
         </View>
       </View>
 
@@ -141,7 +203,25 @@ export default function ProductsScreen() {
       <CategorySelector
         selectedCategory={selectedCategory}
         onSelectCategory={setSelectedCategory}
+        categories={categoryNames}
       />
+
+      {/* Error state banner if any */}
+      {productsError && (
+        <View style={styles.errorBanner}>
+          <AppIcon name="alert-triangle" size={16} color={WarungkuColors.error} />
+          <Text style={styles.errorBannerText}>{productsError}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => {
+              fetchProducts();
+              fetchCategories();
+            }}
+          >
+            <Text style={styles.retryButtonText}>Coba Lagi</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Product List */}
       <FlatList
@@ -157,8 +237,24 @@ export default function ProductsScreen() {
         contentContainerStyle={styles.productListContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            colors={[WarungkuColors.primary]}
+            tintColor={WarungkuColors.primary}
+          />
+        }
         ListEmptyComponent={
-          products.length === 0 ? (
+          isLoadingProducts && products.length === 0 ? (
+            /* Loading State */
+            <View style={styles.emptyContainer}>
+              <ActivityIndicator size="large" color={WarungkuColors.primary} />
+              <Text style={[styles.emptySubtitle, { marginTop: 14 }]}>
+                Memuat produk dari database...
+              </Text>
+            </View>
+          ) : products.length === 0 ? (
             /* Empty State: No products in catalog */
             <View style={styles.emptyContainer}>
               <View style={styles.emptyIconCircle}>
@@ -229,6 +325,7 @@ export default function ProductsScreen() {
           setProductToEdit(null);
         }}
         onSave={handleSaveProduct}
+        isSaving={isSavingProduct}
       />
 
       {/* Delete Confirmation Modal */}
@@ -237,6 +334,12 @@ export default function ProductsScreen() {
         product={productToDelete}
         onClose={() => setProductToDelete(null)}
         onConfirmDelete={handleDeleteProduct}
+      />
+
+      {/* Category Management Modal */}
+      <CategoryManagementModal
+        visible={isCategoryModalVisible}
+        onClose={() => setIsCategoryModalVisible(false)}
       />
     </SafeAreaView>
   );
@@ -268,6 +371,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: WarungkuColors.secondaryText,
     marginTop: 2,
+  },
+  headerActionContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  categoryManageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: WarungkuColors.surfaceLow,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: WarungkuColors.outlineVariant,
+  },
+  categoryManageText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: WarungkuColors.primary,
   },
   productCountBadge: {
     backgroundColor: WarungkuColors.surfaceContainer,
@@ -311,6 +435,34 @@ const styles = StyleSheet.create({
   },
   clearSearchButton: {
     padding: 4,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFEDEA',
+    marginHorizontal: 20,
+    marginTop: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: 12,
+    color: WarungkuColors.error,
+    fontWeight: '600',
+  },
+  retryButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: WarungkuColors.card,
+    borderRadius: 6,
+  },
+  retryButtonText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: WarungkuColors.primary,
   },
   productListContent: {
     paddingHorizontal: 20,

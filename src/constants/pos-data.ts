@@ -2,11 +2,14 @@ export interface Product {
   id: string;
   name: string;
   price: number;
-  category: ProductCategory;
+  category: string;
   stock: number;
+  categoryId?: number | null;
+  categoryName?: string;
+  unit?: string;
 }
 
-export type ProductCategory = 'Semua' | 'Makanan' | 'Minuman' | 'Sembako' | 'Lainnya';
+export type ProductCategory = string;
 
 export interface CartItem {
   product: Product;
