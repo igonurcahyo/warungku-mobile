@@ -15,7 +15,14 @@ export type AppIconName =
   | 'alert-triangle'
   | 'chevron-right'
   | 'arrow-right'
-  | 'check';
+  | 'check'
+  | 'search'
+  | 'plus'
+  | 'minus'
+  | 'trash'
+  | 'x'
+  | 'cart'
+  | 'check-circle';
 
 interface AppIconProps {
   name: AppIconName;
@@ -500,6 +507,209 @@ export function AppIcon({ name, size = 22, color = '#181C1A', focused = false }:
               marginTop: -s * 0.1,
             }}
           />
+        </View>
+      );
+
+    case 'search':
+      return (
+        <View style={[styles.center, { width: s, height: s }]}>
+          <View
+            style={{
+              width: s * 0.52,
+              height: s * 0.52,
+              borderRadius: (s * 0.52) / 2,
+              borderWidth: stroke,
+              borderColor: color,
+              marginTop: -s * 0.1,
+              marginLeft: -s * 0.1,
+            }}
+          />
+          <View
+            style={{
+              width: s * 0.28,
+              height: stroke,
+              backgroundColor: color,
+              borderRadius: 1,
+              transform: [{ rotate: '45deg' }],
+              position: 'absolute',
+              right: s * 0.14,
+              bottom: s * 0.16,
+            }}
+          />
+        </View>
+      );
+
+    case 'plus':
+      return (
+        <View style={[styles.center, { width: s, height: s }]}>
+          <View
+            style={{
+              width: s * 0.65,
+              height: stroke,
+              backgroundColor: color,
+              borderRadius: 1,
+              position: 'absolute',
+            }}
+          />
+          <View
+            style={{
+              width: stroke,
+              height: s * 0.65,
+              backgroundColor: color,
+              borderRadius: 1,
+              position: 'absolute',
+            }}
+          />
+        </View>
+      );
+
+    case 'minus':
+      return (
+        <View style={[styles.center, { width: s, height: s }]}>
+          <View
+            style={{
+              width: s * 0.65,
+              height: stroke,
+              backgroundColor: color,
+              borderRadius: 1,
+            }}
+          />
+        </View>
+      );
+
+    case 'trash':
+      return (
+        <View style={[styles.center, { width: s, height: s }]}>
+          {/* Lid */}
+          <View
+            style={{
+              width: s * 0.65,
+              height: stroke,
+              backgroundColor: color,
+              borderRadius: 1,
+              marginBottom: 1.5,
+            }}
+          />
+          {/* Can */}
+          <View
+            style={{
+              width: s * 0.5,
+              height: s * 0.55,
+              borderWidth: stroke,
+              borderTopWidth: 0,
+              borderColor: color,
+              borderBottomLeftRadius: 3,
+              borderBottomRightRadius: 3,
+              justifyContent: 'space-evenly',
+              alignItems: 'center',
+              flexDirection: 'row',
+            }}
+          >
+            <View style={{ width: stroke * 0.8, height: '60%', backgroundColor: color, borderRadius: 1 }} />
+            <View style={{ width: stroke * 0.8, height: '60%', backgroundColor: color, borderRadius: 1 }} />
+          </View>
+        </View>
+      );
+
+    case 'x':
+      return (
+        <View style={[styles.center, { width: s, height: s }]}>
+          <View
+            style={{
+              width: s * 0.6,
+              height: stroke,
+              backgroundColor: color,
+              borderRadius: 1,
+              position: 'absolute',
+              transform: [{ rotate: '45deg' }],
+            }}
+          />
+          <View
+            style={{
+              width: s * 0.6,
+              height: stroke,
+              backgroundColor: color,
+              borderRadius: 1,
+              position: 'absolute',
+              transform: [{ rotate: '-45deg' }],
+            }}
+          />
+        </View>
+      );
+
+    case 'cart':
+      return (
+        <View style={[styles.center, { width: s, height: s }]}>
+          {/* Basket */}
+          <View
+            style={{
+              width: s * 0.68,
+              height: s * 0.45,
+              borderWidth: stroke,
+              borderTopWidth: 0,
+              borderColor: color,
+              borderBottomLeftRadius: 4,
+              borderBottomRightRadius: 4,
+              backgroundColor: focused ? color : 'transparent',
+              marginBottom: 2,
+            }}
+          />
+          {/* Handle */}
+          <View
+            style={{
+              width: s * 0.44,
+              height: s * 0.28,
+              borderWidth: stroke,
+              borderBottomWidth: 0,
+              borderColor: color,
+              borderTopLeftRadius: 6,
+              borderTopRightRadius: 6,
+              position: 'absolute',
+              top: s * 0.12,
+            }}
+          />
+          {/* Wheels */}
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              width: s * 0.5,
+              marginTop: 1,
+            }}
+          >
+            <View style={{ width: 3.5, height: 3.5, borderRadius: 2, backgroundColor: color }} />
+            <View style={{ width: 3.5, height: 3.5, borderRadius: 2, backgroundColor: color }} />
+          </View>
+        </View>
+      );
+
+    case 'check-circle':
+      return (
+        <View style={[styles.center, { width: s, height: s }]}>
+          <View
+            style={{
+              width: s * 0.85,
+              height: s * 0.85,
+              borderRadius: (s * 0.85) / 2,
+              borderWidth: stroke,
+              borderColor: color,
+              backgroundColor: focused ? color : 'transparent',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <View
+              style={{
+                width: s * 0.38,
+                height: s * 0.22,
+                borderBottomWidth: stroke,
+                borderLeftWidth: stroke,
+                borderColor: focused ? '#FFFFFF' : color,
+                transform: [{ rotate: '-45deg' }],
+                marginTop: -s * 0.05,
+              }}
+            />
+          </View>
         </View>
       );
 
