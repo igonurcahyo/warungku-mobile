@@ -10,8 +10,9 @@ import {
   TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { WarungkuColors } from '@/constants/colors';
-import { DUMMY_PRODUCTS, Product } from '@/constants/pos-data';
+import { Product } from '@/constants/pos-data';
 import { AppIcon } from '@/components/ui/app-icon';
 import { StockSummaryCard } from '@/components/stock/stock-summary-card';
 import {
@@ -20,10 +21,12 @@ import {
 } from '@/components/stock/stock-filter-tabs';
 import { StockProductCard } from '@/components/stock/stock-product-card';
 import { StockEditModal } from '@/components/stock/stock-edit-modal';
+import { useStore } from '@/context/store-context';
 
 export default function StockScreen() {
-  // Local state for products
-  const [products, setProducts] = useState<Product[]>(DUMMY_PRODUCTS);
+  const router = useRouter();
+  // Shared state for products from context
+  const { products, setProducts, unreadCount } = useStore();
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -122,6 +125,25 @@ export default function StockScreen() {
             Pantau dan kelola stok produk
           </Text>
         </View>
+
+        {/* Bell Notification Icon */}
+        <TouchableOpacity
+          style={styles.bellButton}
+          activeOpacity={0.7}
+          onPress={() => router.navigate('/notifications')}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityLabel={unreadCount > 0 ? `Notifikasi Stok (${unreadCount})` : 'Notifikasi Stok'}
+          accessibilityRole="button"
+        >
+          <AppIcon name="bell" size={20} color={WarungkuColors.text} />
+          {unreadCount > 0 && (
+            <View style={styles.badgeContainer}>
+              <Text style={styles.badgeText}>
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       {/* Stock Summary Mini Cards */}
@@ -248,6 +270,38 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: WarungkuColors.secondaryText,
     marginTop: 2,
+  },
+  bellButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: WarungkuColors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: WarungkuColors.outlineVariant,
+    position: 'relative',
+    marginLeft: 12,
+  },
+  badgeContainer: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   searchSection: {
     paddingHorizontal: 20,

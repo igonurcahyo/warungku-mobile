@@ -12,7 +12,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WarungkuColors } from '@/constants/colors';
 import {
-  DUMMY_PRODUCTS,
   Product,
   ProductCategory,
 } from '@/constants/pos-data';
@@ -21,10 +20,11 @@ import { CategorySelector } from '@/components/pos/category-selector';
 import { ProductManagementCard } from '@/components/products/product-management-card';
 import { ProductFormModal } from '@/components/products/product-form-modal';
 import { DeleteConfirmModal } from '@/components/products/delete-confirm-modal';
+import { useStore } from '@/context/store-context';
 
 export default function ProductsScreen() {
-  // Local state for product list
-  const [products, setProducts] = useState<Product[]>(DUMMY_PRODUCTS);
+  // Shared state for product list from context
+  const { products, setProducts } = useStore();
 
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');

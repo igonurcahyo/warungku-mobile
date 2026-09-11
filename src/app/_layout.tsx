@@ -3,6 +3,8 @@ import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 
+import { StoreProvider } from '@/context/store-context';
+
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
@@ -11,7 +13,7 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <>
+    <StoreProvider>
       <StatusBar style="dark" />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
@@ -19,7 +21,9 @@ export default function RootLayout() {
         <Stack.Screen name="register" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="report" />
+        <Stack.Screen name="notifications" />
+        <Stack.Screen name="settings" />
       </Stack>
-    </>
+    </StoreProvider>
   );
 }

@@ -6,11 +6,13 @@ import { AppIcon } from '@/components/ui/app-icon';
 interface DashboardHeaderProps {
   onNotificationPress?: () => void;
   onProfilePress?: () => void;
+  notificationCount?: number;
 }
 
 export function DashboardHeader({
   onNotificationPress,
   onProfilePress,
+  notificationCount = 0,
 }: DashboardHeaderProps) {
   return (
     <View style={styles.headerContainer}>
@@ -45,12 +47,17 @@ export function DashboardHeader({
           activeOpacity={0.7}
           onPress={onNotificationPress}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityLabel="Notifikasi"
+          accessibilityLabel={notificationCount > 0 ? `Notifikasi (${notificationCount})` : 'Notifikasi'}
           accessibilityRole="button"
         >
           <AppIcon name="bell" size={20} color={WarungkuColors.text} />
-          {/* Notification Dot */}
-          <View style={styles.notificationDot} />
+          {notificationCount > 0 && (
+            <View style={styles.badgeContainer}>
+              <Text style={styles.badgeText}>
+                {notificationCount > 9 ? '9+' : notificationCount}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
 
         {/* Profile / Settings Icon */}
@@ -175,6 +182,26 @@ const styles = StyleSheet.create({
     backgroundColor: WarungkuColors.secondaryContainer,
     borderWidth: 1.5,
     borderColor: WarungkuColors.card,
+  },
+  badgeContainer: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   profileButton: {
     width: 44,

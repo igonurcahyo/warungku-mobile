@@ -11,6 +11,7 @@ import { useRouter } from 'expo-router';
 import { WarungkuColors } from '@/constants/colors';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { AppIcon } from '@/components/ui/app-icon';
+import { useStore } from '@/context/store-context';
 
 // Static Dummy Data for Recent Transactions
 const RECENT_TRANSACTIONS = [
@@ -58,11 +59,16 @@ const LOW_STOCK_ITEMS = [
 
 export default function DashboardScreen() {
   const router = useRouter();
+  const { unreadCount } = useStore();
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       {/* Mobile Top Header */}
-      <DashboardHeader />
+      <DashboardHeader
+        notificationCount={unreadCount}
+        onNotificationPress={() => router.navigate('/notifications')}
+        onProfilePress={() => router.navigate('/settings')}
+      />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}

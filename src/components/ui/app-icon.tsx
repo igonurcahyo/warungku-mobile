@@ -28,7 +28,11 @@ export type AppIconName =
   | 'qr-code'
   | 'bar-chart'
   | 'arrow-left'
-  | 'award';
+  | 'award'
+  | 'settings'
+  | 'log-out'
+  | 'store'
+  | 'info';
 
 interface AppIconProps {
   name: AppIconName;
@@ -902,6 +906,162 @@ export function AppIcon({ name, size = 22, color = '#181C1A', focused = false }:
                 height: s * 0.28,
                 backgroundColor: color,
                 transform: [{ rotate: '-20deg' }],
+              }}
+            />
+          </View>
+        </View>
+      );
+
+    case 'settings':
+      return (
+        <View style={[styles.center, { width: s, height: s }]}>
+          {/* Gear outer circle */}
+          <View
+            style={{
+              width: s * 0.76,
+              height: s * 0.76,
+              borderRadius: (s * 0.76) / 2,
+              borderWidth: stroke,
+              borderColor: color,
+              borderStyle: 'dashed',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            {/* Gear inner hub */}
+            <View
+              style={{
+                width: s * 0.32,
+                height: s * 0.32,
+                borderRadius: (s * 0.32) / 2,
+                borderWidth: stroke,
+                borderColor: color,
+                backgroundColor: focused ? color : 'transparent',
+              }}
+            />
+          </View>
+        </View>
+      );
+
+    case 'log-out':
+      return (
+        <View style={[styles.center, { width: s, height: s }]}>
+          {/* Door / portal bracket */}
+          <View
+            style={{
+              position: 'absolute',
+              left: s * 0.16,
+              top: s * 0.18,
+              bottom: s * 0.18,
+              width: s * 0.38,
+              borderWidth: stroke,
+              borderRightWidth: 0,
+              borderColor: color,
+              borderTopLeftRadius: 4,
+              borderBottomLeftRadius: 4,
+            }}
+          />
+          {/* Arrow pointing right */}
+          <View
+            style={{
+              position: 'absolute',
+              left: s * 0.38,
+              width: s * 0.44,
+              height: stroke,
+              backgroundColor: color,
+            }}
+          />
+          {/* Arrow head */}
+          <View
+            style={{
+              position: 'absolute',
+              right: s * 0.16,
+              width: s * 0.22,
+              height: s * 0.22,
+              borderTopWidth: stroke,
+              borderRightWidth: stroke,
+              borderColor: color,
+              transform: [{ rotate: '45deg' }],
+            }}
+          />
+        </View>
+      );
+
+    case 'store':
+      return (
+        <View style={[styles.center, { width: s, height: s }]}>
+          {/* Roof */}
+          <View
+            style={{
+              width: s * 0.8,
+              height: s * 0.26,
+              borderTopLeftRadius: 4,
+              borderTopRightRadius: 4,
+              borderWidth: stroke,
+              borderColor: color,
+              backgroundColor: focused ? color : 'transparent',
+            }}
+          />
+          {/* Base */}
+          <View
+            style={{
+              width: s * 0.7,
+              height: s * 0.44,
+              borderWidth: stroke,
+              borderTopWidth: 0,
+              borderColor: color,
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+            }}
+          >
+            {/* Door */}
+            <View
+              style={{
+                width: s * 0.26,
+                height: s * 0.28,
+                borderTopLeftRadius: 3,
+                borderTopRightRadius: 3,
+                borderWidth: stroke,
+                borderBottomWidth: 0,
+                borderColor: color,
+              }}
+            />
+          </View>
+        </View>
+      );
+
+    case 'info':
+      return (
+        <View style={[styles.center, { width: s, height: s }]}>
+          {/* Circle */}
+          <View
+            style={{
+              width: s * 0.8,
+              height: s * 0.8,
+              borderRadius: (s * 0.8) / 2,
+              borderWidth: stroke,
+              borderColor: color,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {/* Dot */}
+            <View
+              style={{
+                width: stroke * 1.5,
+                height: stroke * 1.5,
+                borderRadius: (stroke * 1.5) / 2,
+                backgroundColor: color,
+                marginBottom: 2,
+              }}
+            />
+            {/* Stem */}
+            <View
+              style={{
+                width: stroke,
+                height: s * 0.28,
+                backgroundColor: color,
+                borderRadius: stroke / 2,
               }}
             />
           </View>
