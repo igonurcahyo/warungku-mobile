@@ -24,6 +24,11 @@ import {
   updateProductApi,
   deleteProductApi,
 } from '@/api/products';
+import {
+  BackendStockItem,
+  getStockApi,
+  updateStockApi,
+} from '@/api/stock';
 
 export interface StockNotification {
   id: string;
@@ -71,9 +76,11 @@ interface StoreContextType {
   categories: CategoryItem[];
   isLoadingProducts: boolean;
   isLoadingCategories: boolean;
+  isLoadingStock: boolean;
   productsError: string | null;
   fetchProducts: () => Promise<void>;
   fetchCategories: () => Promise<void>;
+  fetchStock: () => Promise<void>;
   addProduct: (payload: ProductPayload) => Promise<{ success: boolean; data?: Product; error?: string }>;
   updateProduct: (
     id: string | number,
@@ -86,9 +93,17 @@ interface StoreContextType {
     name: string
   ) => Promise<{ success: boolean; data?: CategoryItem; error?: string }>;
   deleteCategory: (id: number) => Promise<{ success: boolean; error?: string }>;
-  incrementStock: (productId: string) => void;
-  decrementStock: (productId: string) => void;
-  saveStock: (productId: string, newStock: number) => void;
+  updateStock: (
+    productId: string | number,
+    newStock: number,
+    note?: string
+  ) => Promise<{ success: boolean; data?: BackendStockItem; error?: string }>;
+  incrementStock: (productId: string) => Promise<{ success: boolean; error?: string }>;
+  decrementStock: (productId: string) => Promise<{ success: boolean; error?: string }>;
+  saveStock: (
+    productId: string,
+    newStock: number
+  ) => Promise<{ success: boolean; error?: string }>;
   stockNotificationEnabled: boolean;
   setStockNotificationEnabled: (enabled: boolean) => void;
   storeInfo: StoreInfo;
@@ -137,6 +152,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
+  const [isLoadingStock, setIsLoadingStock] = useState(false);
   const [productsError, setProductsError] = useState<string | null>(null);
 
   const [stockNotificationEnabled, setStockNotificationEnabled] = useState(true);
@@ -175,6 +191,47 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // ignore
     } finally {
       setIsLoadingCategories(false);
+    }
+  }, []);
+
+  const fetchStock = useCallback(async (): Promise<void> => {
+    setIsLoadingStock(true);
+    try {
+      const res = await getStockApi();
+      if (res.success && res.data) {
+        setProducts((prev) => {
+          if (prev.length === 0) {
+            return res.data!.map((item) => ({
+              id: String(item.id),
+              name: item.name,
+              price: item.sellingPrice ?? item.price ?? 0,
+              category: item.categoryName || 'Lainnya',
+              stock: item.stock,
+              categoryId: item.categoryId,
+              categoryName: item.categoryName || 'Lainnya',
+              unit: item.unit || 'Pcs',
+            }));
+          }
+          const stockMap = new Map(res.data!.map((s) => [String(s.id), s]));
+          return prev.map((p) => {
+            const fresh = stockMap.get(p.id);
+            if (fresh) {
+              return {
+                ...p,
+                stock: fresh.stock,
+                unit: fresh.unit || p.unit,
+                category: fresh.categoryName || p.category,
+                categoryName: fresh.categoryName || p.categoryName,
+              };
+            }
+            return p;
+          });
+        });
+      }
+    } catch (err) {
+      console.error('fetchStock error:', err);
+    } finally {
+      setIsLoadingStock(false);
     }
   }, []);
 
@@ -269,6 +326,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }));
     fetchProducts();
     fetchCategories();
+    fetchStock();
   };
 
   const logoutUser = async () => {
@@ -303,27 +361,69 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     checkAuthSession();
   }, []);
 
-  // Quick increment stock (+1)
-  const incrementStock = (productId: string) => {
-    setProducts((prev) =>
-      prev.map((p) => (p.id === productId ? { ...p, stock: p.stock + 1 } : p))
-    );
+  // Update stock with server sync
+  const updateStock = async (
+    productId: string | number,
+    newStock: number,
+    note?: string
+  ): Promise<{ success: boolean; data?: BackendStockItem; error?: string }> => {
+    const prodIdStr = String(productId);
+    const num = Math.round(newStock);
+    if (isNaN(num) || num < 0) {
+      return {
+        success: false,
+        error: 'Jumlah stok harus berupa bilangan bulat dan tidak boleh negatif.',
+      };
+    }
+
+    try {
+      const res = await updateStockApi(productId, num, note);
+      if (res.success && res.data) {
+        const confirmedStock = res.data.stock;
+        setProducts((prev) =>
+          prev.map((p) =>
+            p.id === prodIdStr ? { ...p, stock: confirmedStock } : p
+          )
+        );
+        return { success: true, data: res.data };
+      }
+      return {
+        success: false,
+        error: res.error || 'Gagal memperbarui stok di server.',
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        error: err?.message || 'Terjadi kesalahan jaringan saat memperbarui stok.',
+      };
+    }
   };
 
-  // Quick decrement stock (-1, clamped to min 0)
-  const decrementStock = (productId: string) => {
-    setProducts((prev) =>
-      prev.map((p) =>
-        p.id === productId ? { ...p, stock: Math.max(0, p.stock - 1) } : p
-      )
-    );
+  // Quick increment stock (+1) synced with server
+  const incrementStock = async (
+    productId: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    const target = products.find((p) => p.id === productId);
+    if (!target) return { success: false, error: 'Produk tidak ditemukan.' };
+    return updateStock(productId, target.stock + 1);
   };
 
-  // Save specific stock value
-  const saveStock = (productId: string, newStock: number) => {
-    setProducts((prev) =>
-      prev.map((p) => (p.id === productId ? { ...p, stock: Math.max(0, newStock) } : p))
-    );
+  // Quick decrement stock (-1, clamped to min 0) synced with server
+  const decrementStock = async (
+    productId: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    const target = products.find((p) => p.id === productId);
+    if (!target) return { success: false, error: 'Produk tidak ditemukan.' };
+    if (target.stock <= 0) return { success: false, error: 'Stok sudah habis.' };
+    return updateStock(productId, Math.max(0, target.stock - 1));
+  };
+
+  // Save specific stock value synced with server
+  const saveStock = async (
+    productId: string,
+    newStock: number
+  ): Promise<{ success: boolean; error?: string }> => {
+    return updateStock(productId, newStock);
   };
 
   // Internal helper to generate sequential ID
@@ -471,15 +571,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         categories,
         isLoadingProducts,
         isLoadingCategories,
+        isLoadingStock,
         productsError,
         fetchProducts,
         fetchCategories,
+        fetchStock,
         addProduct,
         updateProduct,
         deleteProduct,
         addCategory,
         updateCategory,
         deleteCategory,
+        updateStock,
         incrementStock,
         decrementStock,
         saveStock,

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   Keyboard,
   TouchableWithoutFeedback,
+  Alert,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -26,7 +28,13 @@ import { useStore } from '@/context/store-context';
 export default function StockScreen() {
   const router = useRouter();
   // Shared state for products from context
-  const { products, setProducts, unreadCount } = useStore();
+  const {
+    products,
+    unreadCount,
+    fetchStock,
+    updateStock,
+    isAuthenticated,
+  } = useStore();
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -35,6 +43,27 @@ export default function StockScreen() {
   // Direct edit modal state
   const [selectedProductForEdit, setSelectedProductForEdit] = useState<Product | null>(null);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+
+  // Loading & Stepper locks
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Sync stock from database on mount or when auth state changes
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchStock();
+    }
+  }, [isAuthenticated, fetchStock]);
+
+  // Pull-to-refresh
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await fetchStock();
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [fetchStock]);
 
   // Calculate dynamic summary counts
   const summaryCounts = useMemo(() => {
@@ -82,22 +111,42 @@ export default function StockScreen() {
     });
   }, [products, searchQuery, selectedFilter]);
 
-  // Quick increment stock (+1)
-  const handleIncrement = (productId: string) => {
-    setProducts((prev) =>
-      prev.map((p) =>
-        p.id === productId ? { ...p, stock: p.stock + 1 } : p
-      )
-    );
+  // Quick increment stock (+1) synced with API
+  const handleIncrement = async (productId: string) => {
+    if (updatingId) return;
+    const target = products.find((p) => p.id === productId);
+    if (!target) return;
+
+    setUpdatingId(productId);
+    try {
+      const res = await updateStock(productId, target.stock + 1);
+      if (!res.success) {
+        Alert.alert('Gagal Memperbarui Stok', res.error || 'Terjadi kesalahan saat menambah stok.');
+      }
+    } catch (err: any) {
+      Alert.alert('Gagal Memperbarui Stok', err?.message || 'Terjadi kesalahan jaringan.');
+    } finally {
+      setUpdatingId(null);
+    }
   };
 
-  // Quick decrement stock (-1, clamped to min 0)
-  const handleDecrement = (productId: string) => {
-    setProducts((prev) =>
-      prev.map((p) =>
-        p.id === productId ? { ...p, stock: Math.max(0, p.stock - 1) } : p
-      )
-    );
+  // Quick decrement stock (-1, clamped to min 0) synced with API
+  const handleDecrement = async (productId: string) => {
+    if (updatingId) return;
+    const target = products.find((p) => p.id === productId);
+    if (!target || target.stock <= 0) return;
+
+    setUpdatingId(productId);
+    try {
+      const res = await updateStock(productId, Math.max(0, target.stock - 1));
+      if (!res.success) {
+        Alert.alert('Gagal Memperbarui Stok', res.error || 'Terjadi kesalahan saat mengurangi stok.');
+      }
+    } catch (err: any) {
+      Alert.alert('Gagal Memperbarui Stok', err?.message || 'Terjadi kesalahan jaringan.');
+    } finally {
+      setUpdatingId(null);
+    }
   };
 
   // Open direct edit modal
@@ -106,13 +155,16 @@ export default function StockScreen() {
     setIsEditModalVisible(true);
   };
 
-  // Save new stock value from modal
-  const handleSaveStock = (productId: string, newStock: number) => {
-    setProducts((prev) =>
-      prev.map((p) =>
-        p.id === productId ? { ...p, stock: newStock } : p
-      )
-    );
+  // Save new stock value from modal synced with API
+  const handleSaveStock = async (productId: string, newStock: number) => {
+    try {
+      const res = await updateStock(productId, newStock);
+      if (!res.success) {
+        Alert.alert('Gagal Memperbarui Stok', res.error || 'Terjadi kesalahan saat menyimpan stok.');
+      }
+    } catch (err: any) {
+      Alert.alert('Gagal Memperbarui Stok', err?.message || 'Terjadi kesalahan jaringan.');
+    }
   };
 
   return (
@@ -203,6 +255,14 @@ export default function StockScreen() {
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            colors={[WarungkuColors.primary]}
+            tintColor={WarungkuColors.primary}
+          />
+        }
         ListEmptyComponent={
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View style={styles.emptyContainer}>
