@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,55 +11,42 @@ import { useRouter } from 'expo-router';
 import { WarungkuColors } from '@/constants/colors';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { AppIcon } from '@/components/ui/app-icon';
+import { formatRupiahCompact } from '@/constants/transaction-data';
 import { useStore } from '@/context/store-context';
-
-// Static Dummy Data for Recent Transactions
-const RECENT_TRANSACTIONS = [
-  {
-    id: 'TRX-001',
-    time: '11 Sep 2026 • 10:30',
-    amount: 'Rp 45.000',
-    status: 'Lunas',
-  },
-  {
-    id: 'TRX-002',
-    time: '11 Sep 2026 • 09:15',
-    amount: 'Rp 120.000',
-    status: 'Lunas',
-  },
-  {
-    id: 'TRX-003',
-    time: '11 Sep 2026 • 08:40',
-    amount: 'Rp 32.500',
-    status: 'Lunas',
-  },
-];
-
-// Static Dummy Data for Low Stock Items
-const LOW_STOCK_ITEMS = [
-  {
-    id: '1',
-    name: 'Indomie Goreng',
-    category: 'Makanan Instan',
-    stock: 3,
-  },
-  {
-    id: '2',
-    name: 'Aqua 600ml',
-    category: 'Minuman',
-    stock: 2,
-  },
-  {
-    id: '3',
-    name: 'Teh Pucuk',
-    category: 'Minuman',
-    stock: 4,
-  },
-];
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { unreadCount } = useStore();
+  const { unreadCount, products, transactions } = useStore();
+
+  // Metrics synced with store
+  const totalProducts = products.length;
+  const lowStockItems = useMemo(
+    () => products.filter((p) => p.stock <= 5),
+    [products]
+  );
+  const lowStockCount = lowStockItems.length;
+
+  const todayTrx = useMemo(
+    () => transactions.filter((t) => t.dateISO.startsWith('2026-09-11')),
+    [transactions]
+  );
+  const todaySales = useMemo(
+    () =>
+      todayTrx
+        .filter((t) => t.paymentStatus === 'Lunas')
+        .reduce((sum, t) => sum + t.total, 0),
+    [todayTrx]
+  );
+  const todayCount = todayTrx.length;
+
+  const recentTransactions = useMemo(
+    () => transactions.slice(0, 3),
+    [transactions]
+  );
+  const lowStockDisplay = useMemo(
+    () => lowStockItems.slice(0, 3),
+    [lowStockItems]
+  );
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -85,35 +72,26 @@ export default function DashboardScreen() {
         {/* Summary Cards Grid (2x2) */}
         <View style={styles.summaryGrid}>
           {/* Penjualan Hari Ini */}
-          <TouchableOpacity
-            style={[styles.summaryCard, styles.salesCard]}
-            activeOpacity={0.8}
-            onPress={() => router.navigate('/report')}
-            accessibilityLabel="Lihat Laporan Penjualan"
-            accessibilityRole="button"
-          >
+          <View style={styles.summaryCard}>
             <View style={styles.summaryHeader}>
               <Text style={styles.summaryLabel}>Penjualan Hari Ini</Text>
               <View style={styles.summaryIconBadge}>
                 <AppIcon name="wallet" size={16} color={WarungkuColors.primary} />
               </View>
             </View>
-            <Text style={styles.summaryValuePrimary}>Rp 1.250.000</Text>
-            <View style={styles.summaryCardFooter}>
-              <Text style={styles.summarySubtext}>Ringkasan kasir hari ini</Text>
-              <Text style={styles.summaryLinkText}>Laporan →</Text>
-            </View>
-          </TouchableOpacity>
+            <Text style={styles.summaryValuePrimary}>{formatRupiahCompact(todaySales)}</Text>
+            <Text style={styles.summarySubtext}>Ringkasan kasir hari ini</Text>
+          </View>
 
           {/* Transaksi Hari Ini */}
           <View style={styles.summaryCard}>
             <View style={styles.summaryHeader}>
               <Text style={styles.summaryLabel}>Transaksi Hari Ini</Text>
               <View style={styles.summaryIconBadge}>
-                <AppIcon name="receipt" size={16} color={WarungkuColors.primaryContainer} />
+                <AppIcon name="box" size={16} color={WarungkuColors.primary} />
               </View>
             </View>
-            <Text style={styles.summaryValue}>24</Text>
+            <Text style={styles.summaryValue}>{todayCount}</Text>
             <Text style={styles.summarySubtext}>Total nota tercatat</Text>
           </View>
 
@@ -125,23 +103,25 @@ export default function DashboardScreen() {
                 <AppIcon name="box" size={16} color={WarungkuColors.primary} />
               </View>
             </View>
-            <Text style={styles.summaryValue}>128</Text>
+            <Text style={styles.summaryValue}>{totalProducts}</Text>
             <Text style={styles.summarySubtext}>Item terdaftar aktif</Text>
           </View>
 
           {/* Stok Menipis */}
-          <View style={[styles.summaryCard, styles.warningCardBorder]}>
+          <View style={styles.summaryCard}>
             <View style={styles.summaryHeader}>
               <Text style={styles.summaryLabel}>Stok Menipis</Text>
               <View style={styles.warningIconBadge}>
-                <AppIcon name="alert-triangle" size={15} color={WarungkuColors.secondaryContainer} />
+                <AppIcon name="alert-triangle" size={15} color={WarungkuColors.primary} />
               </View>
             </View>
             <View style={styles.warningValueRow}>
-              <Text style={styles.warningValue}>5</Text>
-              <View style={styles.warningPill}>
-                <Text style={styles.warningPillText}>Perlu Restock</Text>
-              </View>
+              <Text style={styles.warningValue}>{lowStockCount}</Text>
+              {lowStockCount > 0 && (
+                <View style={styles.warningPill}>
+                  <Text style={styles.warningPillText}>Perlu Restock</Text>
+                </View>
+              )}
             </View>
             <Text style={styles.summarySubtext}>Batas minimum stok</Text>
           </View>
@@ -217,32 +197,52 @@ export default function DashboardScreen() {
           </View>
 
           <View style={styles.transactionListCard}>
-            {RECENT_TRANSACTIONS.map((trx, index) => (
-              <View
-                key={trx.id}
-                style={[
-                  styles.transactionItem,
-                  index < RECENT_TRANSACTIONS.length - 1 && styles.itemSeparator,
-                ]}
-              >
-                <View style={styles.trxLeft}>
-                  <View style={styles.trxIconWrapper}>
-                    <AppIcon name="receipt" size={18} color={WarungkuColors.primary} />
-                  </View>
-                  <View>
-                    <Text style={styles.trxIdText}>{trx.id}</Text>
-                    <Text style={styles.trxTimeText}>{trx.time}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.trxRight}>
-                  <Text style={styles.trxAmountText}>{trx.amount}</Text>
-                  <View style={styles.statusBadge}>
-                    <Text style={styles.statusBadgeText}>{trx.status}</Text>
-                  </View>
-                </View>
+            {recentTransactions.length === 0 ? (
+              <View style={styles.emptyInlineCard}>
+                <Text style={styles.emptyInlineText}>Belum ada transaksi</Text>
               </View>
-            ))}
+            ) : (
+              recentTransactions.map((trx, index) => (
+                <View
+                  key={trx.id}
+                  style={[
+                    styles.transactionItem,
+                    index < recentTransactions.length - 1 && styles.itemSeparator,
+                  ]}
+                >
+                  <View style={styles.trxLeft}>
+                    <View style={styles.trxIconWrapper}>
+                      <AppIcon name="receipt" size={18} color={WarungkuColors.primary} />
+                    </View>
+                    <View>
+                      <Text style={styles.trxIdText}>{trx.id}</Text>
+                      <Text style={styles.trxTimeText}>{trx.dateDisplay}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.trxRight}>
+                    <Text style={styles.trxAmountText}>{formatRupiahCompact(trx.total)}</Text>
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        trx.paymentStatus === 'Menunggu Pembayaran' && styles.statusBadgePending,
+                        trx.paymentStatus === 'Dibatalkan' && styles.statusBadgeCancelled,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.statusBadgeText,
+                          trx.paymentStatus === 'Menunggu Pembayaran' && styles.statusTextPending,
+                          trx.paymentStatus === 'Dibatalkan' && styles.statusTextCancelled,
+                        ]}
+                      >
+                        {trx.paymentStatus}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              ))
+            )}
           </View>
         </View>
 
@@ -262,30 +262,52 @@ export default function DashboardScreen() {
           </View>
 
           <View style={styles.stockListCard}>
-            {LOW_STOCK_ITEMS.map((item, index) => (
-              <View
-                key={item.id}
-                style={[
-                  styles.stockItem,
-                  index < LOW_STOCK_ITEMS.length - 1 && styles.itemSeparator,
-                ]}
-              >
-                <View style={styles.stockLeft}>
-                  <View style={styles.stockIconWrapper}>
-                    <AppIcon name="box" size={18} color={WarungkuColors.secondaryText} />
-                  </View>
-                  <View>
-                    <Text style={styles.stockNameText}>{item.name}</Text>
-                    <Text style={styles.stockCategoryText}>{item.category}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.stockBadge}>
-                  <AppIcon name="alert-triangle" size={12} color={WarungkuColors.secondaryContainer} />
-                  <Text style={styles.stockBadgeText}>Stok {item.stock}</Text>
-                </View>
+            {lowStockDisplay.length === 0 ? (
+              <View style={styles.emptyInlineCard}>
+                <Text style={styles.emptyInlineText}>Semua stok produk aman</Text>
               </View>
-            ))}
+            ) : (
+              lowStockDisplay.map((item, index) => (
+                <View
+                  key={item.id}
+                  style={[
+                    styles.stockItem,
+                    index < lowStockDisplay.length - 1 && styles.itemSeparator,
+                  ]}
+                >
+                  <View style={styles.stockLeft}>
+                    <View style={styles.stockIconWrapper}>
+                      <AppIcon name="box" size={18} color={WarungkuColors.secondaryText} />
+                    </View>
+                    <View>
+                      <Text style={styles.stockNameText}>{item.name}</Text>
+                      <Text style={styles.stockCategoryText}>{item.category}</Text>
+                    </View>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.stockBadge,
+                      item.stock === 0 && styles.stockBadgeOut,
+                    ]}
+                  >
+                    <AppIcon
+                      name="alert-triangle"
+                      size={12}
+                      color={item.stock === 0 ? WarungkuColors.error : WarungkuColors.secondaryContainer}
+                    />
+                    <Text
+                      style={[
+                        styles.stockBadgeText,
+                        item.stock === 0 && styles.stockTextOut,
+                      ]}
+                    >
+                      {item.stock === 0 ? 'Habis' : `Stok ${item.stock}`}
+                    </Text>
+                  </View>
+                </View>
+              ))
+            )}
           </View>
         </View>
 
@@ -339,15 +361,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
-  },
-  salesCard: {
-    borderColor: WarungkuColors.outlineVariant,
-    borderLeftWidth: 3.5,
-    borderLeftColor: WarungkuColors.primary,
-  },
-  warningCardBorder: {
-    borderLeftWidth: 3.5,
-    borderLeftColor: WarungkuColors.secondaryContainer,
   },
   summaryHeader: {
     flexDirection: 'row',
@@ -555,10 +568,22 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 8,
   },
+  statusBadgePending: {
+    backgroundColor: '#FEF3C7',
+  },
+  statusBadgeCancelled: {
+    backgroundColor: '#F3F4F6',
+  },
   statusBadgeText: {
     fontSize: 11,
     fontWeight: '700',
     color: WarungkuColors.success,
+  },
+  statusTextPending: {
+    color: '#B45309',
+  },
+  statusTextCancelled: {
+    color: '#6B7280',
   },
   stockListCard: {
     backgroundColor: WarungkuColors.card,
@@ -612,10 +637,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FFE0B2',
   },
+  stockBadgeOut: {
+    backgroundColor: '#FFEDEA',
+    borderColor: '#FFDAD6',
+  },
   stockBadgeText: {
     fontSize: 12,
     fontWeight: '700',
     color: WarungkuColors.secondary,
+  },
+  stockTextOut: {
+    color: WarungkuColors.error,
+  },
+  emptyInlineCard: {
+    paddingVertical: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyInlineText: {
+    fontSize: 13,
+    color: WarungkuColors.secondaryText,
+    fontWeight: '500',
   },
   bottomSpacer: {
     height: 32,
