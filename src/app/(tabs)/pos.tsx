@@ -12,7 +12,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WarungkuColors } from '@/constants/colors';
 import {
-  DUMMY_PRODUCTS,
   Product,
   ProductCategory,
   CartItem,
@@ -22,17 +21,26 @@ import { CategorySelector } from '@/components/pos/category-selector';
 import { ProductCard } from '@/components/pos/product-card';
 import { FloatingCartBar } from '@/components/pos/floating-cart-bar';
 import { CartModal } from '@/components/pos/cart-modal';
+import { QrisPaymentModal } from '@/components/pos/qris-payment-modal';
+import { Transaction } from '@/constants/transaction-data';
+import { useStore } from '@/context/store-context';
 
 export default function PosScreen() {
+  const { products, createTransaction } = useStore();
+
   // Local temporary states
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ProductCategory>('Semua');
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartModalVisible, setIsCartModalVisible] = useState(false);
 
-  // Filter products based on search query and category
+  // QRIS Payment Modal states
+  const [activeQrisTrx, setActiveQrisTrx] = useState<Transaction | null>(null);
+  const [isQrisModalVisible, setIsQrisModalVisible] = useState(false);
+
+  // Filter products based on search query and category (live products from store)
   const filteredProducts = useMemo(() => {
-    return DUMMY_PRODUCTS.filter((product) => {
+    return products.filter((product) => {
       const matchesSearch = product.name
         .toLowerCase()
         .includes(searchQuery.trim().toLowerCase());
@@ -40,7 +48,7 @@ export default function PosScreen() {
         selectedCategory === 'Semua' || product.category === selectedCategory;
       return matchesSearch && matchesCategory;
     });
-  }, [searchQuery, selectedCategory]);
+  }, [products, searchQuery, selectedCategory]);
 
   // Derived cart metrics
   const totalQuantity = useMemo(() => {
@@ -105,6 +113,25 @@ export default function PosScreen() {
 
   const handleClearCart = () => {
     setCartItems([]);
+  };
+
+  const handleProceedToQris = () => {
+    const trxItems = cartItems.map((it) => ({
+      productName: it.product.name,
+      quantity: it.quantity,
+      price: it.product.price,
+      subtotal: it.product.price * it.quantity,
+    }));
+    const newTrx = createTransaction({
+      items: trxItems,
+      total: totalPrice,
+      paymentMethod: 'QRIS',
+      paymentStatus: 'Menunggu Pembayaran',
+    });
+    handleClearCart();
+    setIsCartModalVisible(false);
+    setActiveQrisTrx(newTrx);
+    setIsQrisModalVisible(true);
   };
 
   return (
@@ -244,6 +271,18 @@ export default function PosScreen() {
         onDecrementQuantity={handleDecrementQuantity}
         onRemoveItem={handleRemoveItem}
         onClearCart={handleClearCart}
+        onProceedToQris={handleProceedToQris}
+      />
+
+      {/* QRIS Payment Modal */}
+      <QrisPaymentModal
+        visible={isQrisModalVisible}
+        transaction={activeQrisTrx}
+        onClose={() => setIsQrisModalVisible(false)}
+        onPaidSuccess={() => {
+          setIsQrisModalVisible(false);
+          setActiveQrisTrx(null);
+        }}
       />
     </SafeAreaView>
   );

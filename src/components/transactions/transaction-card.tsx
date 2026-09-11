@@ -7,10 +7,17 @@ import { AppIcon } from '@/components/ui/app-icon';
 interface TransactionCardProps {
   transaction: Transaction;
   onPress: (transaction: Transaction) => void;
+  onResumePayment?: (transaction: Transaction) => void;
 }
 
-export function TransactionCard({ transaction, onPress }: TransactionCardProps) {
+export function TransactionCard({
+  transaction,
+  onPress,
+  onResumePayment,
+}: TransactionCardProps) {
   const isLunas = transaction.paymentStatus === 'Lunas';
+  const isPending = transaction.paymentStatus === 'Menunggu Pembayaran';
+  const isCancelled = transaction.paymentStatus === 'Dibatalkan';
   const isQRIS = transaction.paymentMethod === 'QRIS';
 
   return (
@@ -78,13 +85,17 @@ export function TransactionCard({ transaction, onPress }: TransactionCardProps) 
           <View
             style={[
               styles.statusBadge,
-              isLunas ? styles.statusBadgeLunas : styles.statusBadgePending,
+              isLunas && styles.statusBadgeLunas,
+              isPending && styles.statusBadgePending,
+              isCancelled && styles.statusBadgeCancelled,
             ]}
           >
             <Text
               style={[
                 styles.statusBadgeText,
-                isLunas ? styles.statusTextLunas : styles.statusTextPending,
+                isLunas && styles.statusTextLunas,
+                isPending && styles.statusTextPending,
+                isCancelled && styles.statusTextCancelled,
               ]}
             >
               {transaction.paymentStatus}
@@ -92,6 +103,20 @@ export function TransactionCard({ transaction, onPress }: TransactionCardProps) 
           </View>
         </View>
       </View>
+
+      {/* Action Button for Pending QRIS */}
+      {isPending && (
+        <TouchableOpacity
+          style={styles.resumeButton}
+          activeOpacity={0.8}
+          onPress={() => (onResumePayment ? onResumePayment(transaction) : onPress(transaction))}
+          accessibilityRole="button"
+          accessibilityLabel="Lanjutkan Pembayaran"
+        >
+          <AppIcon name="qr-code" size={15} color="#FFFFFF" />
+          <Text style={styles.resumeButtonText}>Lanjutkan Pembayaran</Text>
+        </TouchableOpacity>
+      )}
     </TouchableOpacity>
   );
 }
@@ -220,6 +245,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF4E6',
     borderColor: '#FFE0B2',
   },
+  statusBadgeCancelled: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#FECACA',
+  },
   statusBadgeText: {
     fontSize: 11,
     fontWeight: '700',
@@ -229,5 +258,29 @@ const styles = StyleSheet.create({
   },
   statusTextPending: {
     color: WarungkuColors.secondary,
+  },
+  statusTextCancelled: {
+    color: '#DC2626',
+  },
+  resumeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: WarungkuColors.primary,
+    borderRadius: 10,
+    paddingVertical: 10,
+    marginTop: 12,
+    shadowColor: WarungkuColors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
+    minHeight: 44,
+  },
+  resumeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

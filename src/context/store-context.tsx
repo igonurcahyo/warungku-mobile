@@ -1,5 +1,12 @@
 import React, { createContext, useContext, useState, useMemo, ReactNode } from 'react';
 import { DUMMY_PRODUCTS, Product } from '@/constants/pos-data';
+import {
+  Transaction,
+  TransactionItem,
+  PaymentMethod,
+  PaymentStatus,
+  DUMMY_TRANSACTIONS,
+} from '@/constants/transaction-data';
 
 export interface StockNotification {
   id: string;
@@ -21,6 +28,13 @@ export interface StoreInfo {
   appSubtitle: string;
 }
 
+interface CreateTransactionParams {
+  items: TransactionItem[];
+  total: number;
+  paymentMethod: PaymentMethod;
+  paymentStatus: PaymentStatus;
+}
+
 interface StoreContextType {
   products: Product[];
   setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
@@ -32,6 +46,11 @@ interface StoreContextType {
   storeInfo: StoreInfo;
   notifications: StockNotification[];
   unreadCount: number;
+  // Transactions
+  transactions: Transaction[];
+  createTransaction: (params: CreateTransactionParams) => Transaction;
+  markTransactionPaid: (transactionId: string) => void;
+  cancelTransaction: (transactionId: string) => void;
 }
 
 const DEFAULT_STORE_INFO: StoreInfo = {
@@ -43,12 +62,26 @@ const DEFAULT_STORE_INFO: StoreInfo = {
   appSubtitle: 'POS & Inventory',
 };
 
+function formatIndonesianDateDisplay(d: Date): string {
+  const months = [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+  ];
+  const day = d.getDate();
+  const month = months[d.getMonth()];
+  const year = d.getFullYear();
+  const hours = d.getHours().toString().padStart(2, '0');
+  const minutes = d.getMinutes().toString().padStart(2, '0');
+  return `${day} ${month} ${year} • ${hours}:${minutes}`;
+}
+
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [products, setProducts] = useState<Product[]>(DUMMY_PRODUCTS);
   const [stockNotificationEnabled, setStockNotificationEnabled] = useState(true);
   const [storeInfo] = useState<StoreInfo>(DEFAULT_STORE_INFO);
+  const [transactions, setTransactions] = useState<Transaction[]>(DUMMY_TRANSACTIONS);
 
   // Quick increment stock (+1)
   const incrementStock = (productId: string) => {
@@ -70,6 +103,103 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const saveStock = (productId: string, newStock: number) => {
     setProducts((prev) =>
       prev.map((p) => (p.id === productId ? { ...p, stock: Math.max(0, newStock) } : p))
+    );
+  };
+
+  // Internal helper to generate sequential ID
+  const generateNextTransactionId = (curr: Transaction[]): string => {
+    let maxNum = 125;
+    curr.forEach((t) => {
+      const match = t.id.match(/\d+/);
+      if (match) {
+        const num = parseInt(match[0], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    });
+    return `TRX-${(maxNum + 1).toString().padStart(5, '0')}`;
+  };
+
+  // Create new transaction (Cash or QRIS pending)
+  const createTransaction = (params: CreateTransactionParams): Transaction => {
+    const nextId = generateNextTransactionId(transactions);
+    const now = new Date();
+    const isPaid = params.paymentStatus === 'Lunas';
+
+    const newTrx: Transaction = {
+      id: nextId,
+      dateISO: now.toISOString(),
+      dateDisplay: formatIndonesianDateDisplay(now),
+      items: params.items,
+      total: params.total,
+      paymentMethod: params.paymentMethod,
+      paymentStatus: params.paymentStatus,
+      paidAt: isPaid ? now.toISOString() : undefined,
+    };
+
+    // If payment is completed immediately (Tunai), deduct stock ONCE
+    if (isPaid) {
+      setProducts((prevProducts) =>
+        prevProducts.map((p) => {
+          const item = params.items.find(
+            (it) => it.productName.toLowerCase() === p.name.toLowerCase()
+          );
+          if (item) {
+            return { ...p, stock: Math.max(0, p.stock - item.quantity) };
+          }
+          return p;
+        })
+      );
+    }
+
+    setTransactions((prev) => [newTrx, ...prev]);
+    return newTrx;
+  };
+
+  // Mark an existing pending transaction as paid (QRIS success or resume paid)
+  // PREVENTS DUPLICATE STOCK DEDUCTION via paidAt flag and status check
+  const markTransactionPaid = (transactionId: string) => {
+    setTransactions((prevTrx) => {
+      const target = prevTrx.find((t) => t.id === transactionId);
+
+      // If already paid or doesn't exist, do nothing
+      if (!target || target.paymentStatus === 'Lunas' || target.paidAt) {
+        return prevTrx;
+      }
+
+      // Deduct stock for items once
+      setProducts((prevProducts) =>
+        prevProducts.map((p) => {
+          const item = target.items.find(
+            (it) => it.productName.toLowerCase() === p.name.toLowerCase()
+          );
+          if (item) {
+            return { ...p, stock: Math.max(0, p.stock - item.quantity) };
+          }
+          return p;
+        })
+      );
+
+      // Return updated transactions
+      return prevTrx.map((t) =>
+        t.id === transactionId
+          ? {
+              ...t,
+              paymentStatus: 'Lunas' as PaymentStatus,
+              paidAt: new Date().toISOString(),
+            }
+          : t
+      );
+    });
+  };
+
+  // Cancel an existing pending transaction explicitly
+  const cancelTransaction = (transactionId: string) => {
+    setTransactions((prevTrx) =>
+      prevTrx.map((t) =>
+        t.id === transactionId && t.paymentStatus === 'Menunggu Pembayaran'
+          ? { ...t, paymentStatus: 'Dibatalkan' as PaymentStatus }
+          : t
+      )
     );
   };
 
@@ -126,6 +256,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         storeInfo,
         notifications,
         unreadCount,
+        transactions,
+        createTransaction,
+        markTransactionPaid,
+        cancelTransaction,
       }}
     >
       {children}

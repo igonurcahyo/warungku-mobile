@@ -6,7 +6,7 @@ export interface TransactionItem {
 }
 
 export type PaymentMethod = 'Tunai' | 'QRIS';
-export type PaymentStatus = 'Lunas' | 'Menunggu Pembayaran';
+export type PaymentStatus = 'Lunas' | 'Menunggu Pembayaran' | 'Dibatalkan';
 export type DateFilterType = 'Semua' | 'Hari Ini' | '7 Hari' | '30 Hari';
 
 export interface Transaction {
@@ -17,6 +17,7 @@ export interface Transaction {
   total: number;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
+  paidAt?: string; // Set when payment is completed to guarantee single stock deduction
 }
 
 export function formatRupiahCompact(amount: number): string {

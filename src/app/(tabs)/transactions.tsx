@@ -12,7 +12,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WarungkuColors } from '@/constants/colors';
 import {
-  DUMMY_TRANSACTIONS,
   Transaction,
   DateFilterType,
 } from '@/constants/transaction-data';
@@ -21,10 +20,11 @@ import { TransactionSummaryCard } from '@/components/transactions/transaction-su
 import { TransactionFilterTabs } from '@/components/transactions/transaction-filter-tabs';
 import { TransactionCard } from '@/components/transactions/transaction-card';
 import { TransactionDetailModal } from '@/components/transactions/transaction-detail-modal';
+import { QrisPaymentModal } from '@/components/pos/qris-payment-modal';
+import { useStore } from '@/context/store-context';
 
 export default function TransactionsScreen() {
-  // Local state for transactions
-  const [transactions] = useState<Transaction[]>(DUMMY_TRANSACTIONS);
+  const { transactions, cancelTransaction } = useStore();
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -32,6 +32,21 @@ export default function TransactionsScreen() {
 
   // Detail modal state
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+
+  // Resume QRIS modal state
+  const [resumingTrx, setResumingTrx] = useState<Transaction | null>(null);
+  const [isQrisModalVisible, setIsQrisModalVisible] = useState(false);
+
+  const handleResumePayment = (trx: Transaction) => {
+    setSelectedTransaction(null);
+    setResumingTrx(trx);
+    setIsQrisModalVisible(true);
+  };
+
+  const handleCancelPayment = (trx: Transaction) => {
+    cancelTransaction(trx.id);
+    setSelectedTransaction(null);
+  };
 
   // Reference date: 11 September 2026
   const REFERENCE_DATE = useMemo(() => new Date('2026-09-11T23:59:59'), []);
@@ -104,9 +119,11 @@ export default function TransactionsScreen() {
     });
   }, [transactions, searchQuery, selectedFilter]);
 
-  // Aggregate metrics for currently filtered list
+  // Aggregate metrics for currently filtered list (only counting paid transactions for total sales)
   const totalSales = useMemo(() => {
-    return filteredTransactions.reduce((acc, trx) => acc + trx.total, 0);
+    return filteredTransactions
+      .filter((trx) => trx.paymentStatus === 'Lunas')
+      .reduce((acc, trx) => acc + trx.total, 0);
   }, [filteredTransactions]);
 
   return (
@@ -168,6 +185,7 @@ export default function TransactionsScreen() {
           <TransactionCard
             transaction={item}
             onPress={(trx) => setSelectedTransaction(trx)}
+            onResumePayment={handleResumePayment}
           />
         )}
         contentContainerStyle={styles.listContent}
@@ -205,6 +223,22 @@ export default function TransactionsScreen() {
         visible={!!selectedTransaction}
         transaction={selectedTransaction}
         onClose={() => setSelectedTransaction(null)}
+        onResumePayment={handleResumePayment}
+        onCancelPayment={handleCancelPayment}
+      />
+
+      {/* Resume QRIS Payment Modal */}
+      <QrisPaymentModal
+        visible={isQrisModalVisible}
+        transaction={resumingTrx}
+        onClose={() => {
+          setIsQrisModalVisible(false);
+          setResumingTrx(null);
+        }}
+        onPaidSuccess={() => {
+          setIsQrisModalVisible(false);
+          setResumingTrx(null);
+        }}
       />
     </SafeAreaView>
   );

@@ -15,6 +15,7 @@ import {
 import { WarungkuColors } from '@/constants/colors';
 import { CartItem, formatRupiah } from '@/constants/pos-data';
 import { AppIcon } from '@/components/ui/app-icon';
+import { useStore } from '@/context/store-context';
 
 type ModalStep = 'cart' | 'summary' | 'processing' | 'success';
 
@@ -28,6 +29,7 @@ interface CartModalProps {
   onDecrementQuantity: (productId: string) => void;
   onRemoveItem: (productId: string) => void;
   onClearCart: () => void;
+  onProceedToQris?: () => void;
 }
 
 const QUICK_NOMINALS = [10000, 20000, 50000, 100000];
@@ -42,8 +44,11 @@ export function CartModal({
   onDecrementQuantity,
   onRemoveItem,
   onClearCart,
+  onProceedToQris,
 }: CartModalProps) {
+  const { createTransaction } = useStore();
   const [step, setStep] = useState<ModalStep>('cart');
+  const [paymentMethod, setPaymentMethod] = useState<'Tunai' | 'QRIS'>('Tunai');
   const [cashGiven, setCashGiven] = useState<number>(0);
   const [cashInput, setCashInput] = useState<string>('');
 
@@ -58,6 +63,7 @@ export function CartModal({
     setStep('cart');
     setCashGiven(0);
     setCashInput('');
+    setPaymentMethod('Tunai');
     onClose();
   };
 
@@ -80,9 +86,21 @@ export function CartModal({
     setCashInput(formatRupiah(amount));
   };
 
-  // Process simulated payment
+  // Process simulated payment for cash
   const handleConfirmPayment = () => {
     if (!isValidPayment) return;
+    const trxItems = cartItems.map((it) => ({
+      productName: it.product.name,
+      quantity: it.quantity,
+      price: it.product.price,
+      subtotal: it.product.price * it.quantity,
+    }));
+    createTransaction({
+      items: trxItems,
+      total: totalPrice,
+      paymentMethod: 'Tunai',
+      paymentStatus: 'Lunas',
+    });
     setStep('processing');
     setTimeout(() => {
       setStep('success');
@@ -94,6 +112,7 @@ export function CartModal({
     onClearCart();
     setCashGiven(0);
     setCashInput('');
+    setPaymentMethod('Tunai');
     setStep('cart');
     onClose();
   };
@@ -321,182 +340,249 @@ export function CartModal({
                     </Text>
                   </View>
 
-                  {/* Cash Payment Input Section */}
-                  <View style={styles.cashSection}>
-                    <Text style={styles.cashSectionLabel}>Uang Pembeli</Text>
-                    <View
-                      style={[
-                        styles.cashInputContainer,
-                        isShort && styles.cashInputContainerError,
-                        isValidPayment && cashGiven > 0 && styles.cashInputContainerSuccess,
-                      ]}
-                    >
-                      <Text style={styles.cashInputCurrencyPrefix}>Rp</Text>
-                      <TextInput
-                        style={styles.cashTextInput}
-                        placeholder="Masukkan uang pembeli"
-                        placeholderTextColor={WarungkuColors.outline}
-                        keyboardType="numeric"
-                        value={
-                          cashInput
-                            ? cashInput.replace(/^Rp\s?/, '')
-                            : ''
-                        }
-                        onChangeText={handleCashInputChange}
-                        autoFocus={false}
-                      />
-                      {cashInput.length > 0 && (
-                        <TouchableOpacity
-                          style={styles.clearCashButton}
-                          onPress={() => {
-                            setCashGiven(0);
-                            setCashInput('');
-                          }}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <AppIcon
-                            name="x"
-                            size={14}
-                            color={WarungkuColors.secondaryText}
-                          />
-                        </TouchableOpacity>
-                      )}
-                    </View>
-
-                    {/* Quick Nominal Buttons */}
-                    <Text style={styles.quickNominalsHeader}>
-                      Pilihan Cepat Nominal:
-                    </Text>
-                    <View style={styles.quickNominalsRow}>
-                      {/* Uang Pas Button */}
+                  {/* Pilihan Metode Pembayaran: [ Tunai ] [ QRIS ] */}
+                  <View style={styles.methodSelectorBox}>
+                    <Text style={styles.methodSelectorLabel}>Pilihan Pembayaran</Text>
+                    <View style={styles.methodToggleRow}>
                       <TouchableOpacity
                         style={[
-                          styles.quickNominalChip,
-                          styles.quickNominalUangPas,
-                          cashGiven === totalPrice &&
-                            styles.quickNominalChipActive,
+                          styles.methodToggleBtn,
+                          paymentMethod === 'Tunai' && styles.methodToggleBtnActive,
                         ]}
                         activeOpacity={0.75}
-                        onPress={() => handleSelectNominal(totalPrice)}
+                        onPress={() => setPaymentMethod('Tunai')}
+                        accessibilityRole="button"
                       >
+                        <AppIcon
+                          name="wallet"
+                          size={16}
+                          color={paymentMethod === 'Tunai' ? '#FFFFFF' : WarungkuColors.text}
+                        />
                         <Text
                           style={[
-                            styles.quickNominalText,
-                            styles.quickNominalTextUangPas,
-                            cashGiven === totalPrice &&
-                              styles.quickNominalTextActive,
+                            styles.methodToggleText,
+                            paymentMethod === 'Tunai' && styles.methodToggleTextActive,
                           ]}
                         >
-                          Uang Pas
+                          Tunai
                         </Text>
                       </TouchableOpacity>
 
-                      {/* Common Denominations */}
-                      {QUICK_NOMINALS.map((nominal) => {
-                        const isSelected = cashGiven === nominal;
-                        return (
-                          <TouchableOpacity
-                            key={nominal}
-                            style={[
-                              styles.quickNominalChip,
-                              isSelected && styles.quickNominalChipActive,
-                            ]}
-                            activeOpacity={0.75}
-                            onPress={() => handleSelectNominal(nominal)}
-                          >
-                            <Text
-                              style={[
-                                styles.quickNominalText,
-                                isSelected && styles.quickNominalTextActive,
-                              ]}
-                            >
-                              {formatRupiah(nominal)}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
+                      <TouchableOpacity
+                        style={[
+                          styles.methodToggleBtn,
+                          paymentMethod === 'QRIS' && styles.methodToggleBtnActive,
+                        ]}
+                        activeOpacity={0.75}
+                        onPress={() => setPaymentMethod('QRIS')}
+                        accessibilityRole="button"
+                      >
+                        <AppIcon
+                          name="qr-code"
+                          size={16}
+                          color={paymentMethod === 'QRIS' ? '#FFFFFF' : WarungkuColors.text}
+                        />
+                        <Text
+                          style={[
+                            styles.methodToggleText,
+                            paymentMethod === 'QRIS' && styles.methodToggleTextActive,
+                          ]}
+                        >
+                          QRIS
+                        </Text>
+                      </TouchableOpacity>
                     </View>
+                  </View>
 
-                    {/* Change / Shortage Realtime Display */}
-                    {cashGiven > 0 && (
-                      <View style={styles.changeFeedbackContainer}>
-                        {isShort ? (
-                          /* Shortage Error State */
-                          <View style={styles.shortageCard}>
-                            <View style={styles.feedbackHeaderRow}>
-                              <AppIcon
-                                name="alert-triangle"
-                                size={18}
-                                color={WarungkuColors.error}
-                              />
-                              <Text style={styles.shortageTitle}>
-                                Uang pembeli kurang {formatRupiah(shortage)}
-                              </Text>
-                            </View>
-                            <Text style={styles.shortageSubtitle}>
-                              Nominal pembayaran belum mencukupi total belanja.
-                            </Text>
-                          </View>
-                        ) : (
-                          /* Valid Payment (Exact or Excess Change) */
-                          <View
-                            style={[
-                              styles.changeCard,
-                              change === 0
-                                ? styles.changeCardExact
-                                : styles.changeCardExcess,
-                            ]}
+                  {paymentMethod === 'Tunai' ? (
+                    /* Cash Payment Input Section */
+                    <View style={styles.cashSection}>
+                      <Text style={styles.cashSectionLabel}>Uang Pembeli</Text>
+                      <View
+                        style={[
+                          styles.cashInputContainer,
+                          isShort && styles.cashInputContainerError,
+                          isValidPayment && cashGiven > 0 && styles.cashInputContainerSuccess,
+                        ]}
+                      >
+                        <Text style={styles.cashInputCurrencyPrefix}>Rp</Text>
+                        <TextInput
+                          style={styles.cashTextInput}
+                          placeholder="Masukkan uang pembeli"
+                          placeholderTextColor={WarungkuColors.outline}
+                          keyboardType="numeric"
+                          value={
+                            cashInput
+                              ? cashInput.replace(/^Rp\s?/, '')
+                              : ''
+                          }
+                          onChangeText={handleCashInputChange}
+                          autoFocus={false}
+                        />
+                        {cashInput.length > 0 && (
+                          <TouchableOpacity
+                            style={styles.clearCashButton}
+                            onPress={() => {
+                              setCashGiven(0);
+                              setCashInput('');
+                            }}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                           >
-                            <View style={styles.changeHeaderRow}>
-                              <Text style={styles.changeLabel}>
-                                {change === 0
-                                  ? 'Uang Pas'
-                                  : 'Kembalian'}
-                              </Text>
-                              <View
-                                style={[
-                                  styles.changeStatusBadge,
-                                  change === 0
-                                    ? styles.badgeExact
-                                    : styles.badgeExcess,
-                                ]}
-                              >
-                                <Text
-                                  style={[
-                                    styles.changeStatusBadgeText,
-                                    change === 0
-                                      ? styles.badgeExactText
-                                      : styles.badgeExcessText,
-                                  ]}
-                                >
-                                  {change === 0
-                                    ? 'Pas'
-                                    : 'Perlu Kembalian'}
-                                </Text>
-                              </View>
-                            </View>
-
-                            <Text
-                              style={[
-                                styles.changeValue,
-                                change === 0
-                                  ? styles.changeValueExact
-                                  : styles.changeValueExcess,
-                              ]}
-                            >
-                              {formatRupiah(change)}
-                            </Text>
-
-                            <Text style={styles.changeNote}>
-                              {change === 0
-                                ? 'Tidak ada uang kembalian yang harus diberikan.'
-                                : 'Berikan uang kembalian sejumlah nominal di atas ke pembeli.'}
-                            </Text>
-                          </View>
+                            <AppIcon
+                              name="x"
+                              size={14}
+                              color={WarungkuColors.secondaryText}
+                            />
+                          </TouchableOpacity>
                         )}
                       </View>
-                    )}
-                  </View>
+
+                      {/* Quick Nominal Buttons */}
+                      <Text style={styles.quickNominalsHeader}>
+                        Pilihan Cepat Nominal:
+                      </Text>
+                      <View style={styles.quickNominalsRow}>
+                        {/* Uang Pas Button */}
+                        <TouchableOpacity
+                          style={[
+                            styles.quickNominalChip,
+                            styles.quickNominalUangPas,
+                            cashGiven === totalPrice &&
+                              styles.quickNominalChipActive,
+                          ]}
+                          activeOpacity={0.75}
+                          onPress={() => handleSelectNominal(totalPrice)}
+                        >
+                          <Text
+                            style={[
+                              styles.quickNominalText,
+                              styles.quickNominalTextUangPas,
+                              cashGiven === totalPrice &&
+                                styles.quickNominalTextActive,
+                            ]}
+                          >
+                            Uang Pas
+                          </Text>
+                        </TouchableOpacity>
+
+                        {/* Common Denominations */}
+                        {QUICK_NOMINALS.map((nominal) => {
+                          const isSelected = cashGiven === nominal;
+                          return (
+                            <TouchableOpacity
+                              key={nominal}
+                              style={[
+                                styles.quickNominalChip,
+                                isSelected && styles.quickNominalChipActive,
+                              ]}
+                              activeOpacity={0.75}
+                              onPress={() => handleSelectNominal(nominal)}
+                            >
+                              <Text
+                                style={[
+                                  styles.quickNominalText,
+                                  isSelected && styles.quickNominalTextActive,
+                                ]}
+                              >
+                                {formatRupiah(nominal)}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+
+                      {/* Change / Shortage Realtime Display */}
+                      {cashGiven > 0 && (
+                        <View style={styles.changeFeedbackContainer}>
+                          {isShort ? (
+                            /* Shortage Error State */
+                            <View style={styles.shortageCard}>
+                              <View style={styles.feedbackHeaderRow}>
+                                <AppIcon
+                                  name="alert-triangle"
+                                  size={18}
+                                  color={WarungkuColors.error}
+                                />
+                                <Text style={styles.shortageTitle}>
+                                  Uang pembeli kurang {formatRupiah(shortage)}
+                                </Text>
+                              </View>
+                              <Text style={styles.shortageSubtitle}>
+                                Nominal pembayaran belum mencukupi total belanja.
+                              </Text>
+                            </View>
+                          ) : (
+                            /* Valid Payment (Exact or Excess Change) */
+                            <View
+                              style={[
+                                styles.changeCard,
+                                change === 0
+                                  ? styles.changeCardExact
+                                  : styles.changeCardExcess,
+                              ]}
+                            >
+                              <View style={styles.changeHeaderRow}>
+                                <Text style={styles.changeLabel}>
+                                  {change === 0
+                                    ? 'Uang Pas'
+                                    : 'Kembalian'}
+                                </Text>
+                                <View
+                                  style={[
+                                    styles.changeStatusBadge,
+                                    change === 0
+                                      ? styles.badgeExact
+                                      : styles.badgeExcess,
+                                  ]}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.changeStatusBadgeText,
+                                      change === 0
+                                        ? styles.badgeExactText
+                                        : styles.badgeExcessText,
+                                    ]}
+                                  >
+                                    {change === 0
+                                      ? 'Pas'
+                                      : 'Perlu Kembalian'}
+                                  </Text>
+                                </View>
+                              </View>
+
+                              <Text
+                                style={[
+                                  styles.changeValue,
+                                  change === 0
+                                    ? styles.changeValueExact
+                                    : styles.changeValueExcess,
+                                ]}
+                              >
+                                {formatRupiah(change)}
+                              </Text>
+
+                              <Text style={styles.changeNote}>
+                                {change === 0
+                                  ? 'Tidak ada uang kembalian yang harus diberikan.'
+                                  : 'Berikan uang kembalian sejumlah nominal di atas ke pembeli.'}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  ) : (
+                    /* QRIS Section Prompt */
+                    <View style={styles.qrisSectionPrompt}>
+                      <View style={styles.qrisPromptIcon}>
+                        <AppIcon name="qr-code" size={32} color={WarungkuColors.primary} />
+                      </View>
+                      <Text style={styles.qrisPromptTitle}>Pembayaran via QRIS</Text>
+                      <Text style={styles.qrisPromptSubtitle}>
+                        Kode QRIS simulasi akan dibuat dengan status &quot;Menunggu Pembayaran&quot;. Transaksi dapat dilanjutkan kapan saja melalui Riwayat jika belum diselesaikan.
+                      </Text>
+                    </View>
+                  )}
 
                   {/* Items Summary Accordion/Table */}
                   <View style={styles.summaryTable}>
@@ -523,21 +609,36 @@ export function CartModal({
 
                 {/* Actions */}
                 <View style={styles.footerContainer}>
-                  <TouchableOpacity
-                    style={[
-                      styles.payButton,
-                      !isValidPayment && styles.payButtonDisabled,
-                    ]}
-                    activeOpacity={0.85}
-                    disabled={!isValidPayment}
-                    onPress={handleConfirmPayment}
-                    accessibilityRole="button"
-                    accessibilityLabel="Konfirmasi Pembayaran"
-                  >
-                    <Text style={styles.payButtonText}>
-                      Konfirmasi Pembayaran
-                    </Text>
-                  </TouchableOpacity>
+                  {paymentMethod === 'Tunai' ? (
+                    <TouchableOpacity
+                      style={[
+                        styles.payButton,
+                        !isValidPayment && styles.payButtonDisabled,
+                      ]}
+                      activeOpacity={0.85}
+                      disabled={!isValidPayment}
+                      onPress={handleConfirmPayment}
+                      accessibilityRole="button"
+                      accessibilityLabel="Konfirmasi Pembayaran"
+                    >
+                      <Text style={styles.payButtonText}>
+                        Konfirmasi Pembayaran
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.payButton}
+                      activeOpacity={0.85}
+                      onPress={onProceedToQris}
+                      accessibilityRole="button"
+                      accessibilityLabel="Lanjut Pembayaran QRIS"
+                    >
+                      <AppIcon name="qr-code" size={18} color="#FFFFFF" />
+                      <Text style={styles.payButtonText}>
+                        Lanjut Pembayaran QRIS
+                      </Text>
+                    </TouchableOpacity>
+                  )}
 
                   <TouchableOpacity
                     style={styles.secondaryBackButton}
@@ -872,6 +973,74 @@ const styles = StyleSheet.create({
     color: WarungkuColors.primary,
     letterSpacing: -0.5,
     marginTop: 2,
+  },
+  methodSelectorBox: {
+    marginBottom: 16,
+  },
+  methodSelectorLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: WarungkuColors.text,
+    marginBottom: 8,
+  },
+  methodToggleRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  methodToggleBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: WarungkuColors.surfaceLow,
+    borderWidth: 1.5,
+    borderColor: WarungkuColors.outlineVariant,
+    minHeight: 48,
+  },
+  methodToggleBtnActive: {
+    backgroundColor: WarungkuColors.primary,
+    borderColor: WarungkuColors.primary,
+  },
+  methodToggleText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: WarungkuColors.text,
+  },
+  methodToggleTextActive: {
+    color: '#FFFFFF',
+  },
+  qrisSectionPrompt: {
+    backgroundColor: WarungkuColors.card,
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: WarungkuColors.outlineVariant,
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 8,
+  },
+  qrisPromptIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#E6F4EA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  qrisPromptTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: WarungkuColors.text,
+  },
+  qrisPromptSubtitle: {
+    fontSize: 12,
+    color: WarungkuColors.secondaryText,
+    textAlign: 'center',
+    lineHeight: 18,
   },
   cashSection: {
     backgroundColor: WarungkuColors.card,
