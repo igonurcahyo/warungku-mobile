@@ -22,7 +22,8 @@ export type AppIconName =
   | 'trash'
   | 'x'
   | 'cart'
-  | 'check-circle';
+  | 'check-circle'
+  | 'edit';
 
 interface AppIconProps {
   name: AppIconName;
@@ -710,6 +711,37 @@ export function AppIcon({ name, size = 22, color = '#181C1A', focused = false }:
               }}
             />
           </View>
+        </View>
+      );
+
+    case 'edit':
+      return (
+        <View style={[styles.center, { width: s, height: s }]}>
+          {/* Pencil body */}
+          <View
+            style={{
+              width: s * 0.26,
+              height: s * 0.62,
+              borderWidth: stroke,
+              borderColor: color,
+              borderRadius: 2,
+              transform: [{ rotate: '-45deg' }],
+              backgroundColor: focused ? color : 'transparent',
+              marginBottom: s * 0.1,
+              marginLeft: s * 0.1,
+            }}
+          />
+          {/* Pencil baseline */}
+          <View
+            style={{
+              width: s * 0.6,
+              height: stroke,
+              backgroundColor: color,
+              borderRadius: 1,
+              position: 'absolute',
+              bottom: s * 0.15,
+            }}
+          />
         </View>
       );
 
